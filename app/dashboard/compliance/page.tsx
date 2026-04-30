@@ -1,248 +1,250 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { complianceReports } from '@/lib/mock-data';
-import type { ComplianceStatus, ComplianceFramework } from '@/lib/types';
 import {
-  Shield,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   AlertTriangle,
   CheckCircle,
-  Clock,
-  FileText,
-  Download,
+  Copy,
+  TrendingDown,
+  Loader2,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-const statusConfig: Record<ComplianceStatus, { color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  compliant: { color: 'bg-success/20 text-success border-success/30', icon: CheckCircle },
-  non_compliant: { color: 'bg-destructive/20 text-destructive border-destructive/30', icon: AlertTriangle },
-  pending_review: { color: 'bg-warning/20 text-warning border-warning/30', icon: Clock },
+interface ComplianceIssue {
+  id: string;
+  type: string;
+  severity: 'critical' | 'warning' | 'info';
+  orgId: string;
+  orgName: string;
+  description: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface ComplianceSummary {
+  totalIssues: number;
+  critical: number;
+  warnings: number;
+  info: number;
+}
+
+interface ComplianceData {
+  violations: ComplianceIssue[];
+  duplicates: ComplianceIssue[];
+  riskQueue: ComplianceIssue[];
+  summary: ComplianceSummary;
+}
+
+const severityConfig: Record<string, { color: string; label: string }> = {
+  critical: { color: 'bg-destructive/20 text-destructive border-destructive/30', label: 'Crítico' },
+  warning: { color: 'bg-warning/20 text-warning border-warning/30', label: 'Atenção' },
+  info: { color: 'bg-info/20 text-info border-info/30', label: 'Info' },
 };
 
-const frameworkColors: Record<ComplianceFramework, string> = {
-  SOC2: 'bg-chart-1/20 text-chart-1 border-chart-1/30',
-  GDPR: 'bg-chart-2/20 text-chart-2 border-chart-2/30',
-  HIPAA: 'bg-chart-3/20 text-chart-3 border-chart-3/30',
-  ISO27001: 'bg-chart-4/20 text-chart-4 border-chart-4/30',
-  PCI_DSS: 'bg-chart-5/20 text-chart-5 border-chart-5/30',
+const violationTypeLabels: Record<string, string> = {
+  expense_limit_exceeded: 'Limite de despesa excedido',
+  receipt_duplicate: 'Recibo duplicado',
+  high_churn_risk: 'Alto risco de churn',
+  missing_receipt: 'Recibo ausente',
+  policy_violation: 'Violação de política',
 };
+
+function IssueTable({ issues }: { issues: ComplianceIssue[] }) {
+  if (issues.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+        <CheckCircle className="h-8 w-8 text-success" />
+        <p>Nenhum problema encontrado</p>
+      </div>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Organização</TableHead>
+          <TableHead>Tipo</TableHead>
+          <TableHead>Descrição</TableHead>
+          <TableHead>Severidade</TableHead>
+          <TableHead>Data</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {issues.map((issue) => (
+          <TableRow key={issue.id}>
+            <TableCell className="font-medium">{issue.orgName ?? '—'}</TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {violationTypeLabels[issue.type] ?? issue.type}
+            </TableCell>
+            <TableCell className="text-sm max-w-xs truncate">{issue.description}</TableCell>
+            <TableCell>
+              <Badge className={severityConfig[issue.severity]?.color ?? 'bg-muted text-muted-foreground'}>
+                {severityConfig[issue.severity]?.label ?? issue.severity}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {format(new Date(issue.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
 
 export default function CompliancePage() {
-  // Stats
-  const stats = {
-    total: complianceReports.length,
-    compliant: complianceReports.filter((r) => r.status === 'compliant').length,
-    nonCompliant: complianceReports.filter((r) => r.status === 'non_compliant').length,
-    criticalIssues: complianceReports.reduce((sum, r) => sum + r.criticalIssues, 0),
-  };
+  const [data, setData] = useState<ComplianceData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const avgScore = Math.round(
-    complianceReports.reduce((sum, r) => sum + r.score, 0) / complianceReports.length
-  );
+  function fetchData() {
+    setIsLoading(true);
+    fetch('/api/compliance')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) setData(result.data);
+      })
+      .finally(() => setIsLoading(false));
+  }
+
+  useEffect(() => { fetchData(); }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const summary = data?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, info: 0 };
+  const violations = data?.violations ?? [];
+  const duplicates = data?.duplicates ?? [];
+  const riskQueue = data?.riskQueue ?? [];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Compliance</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Conformidade</h1>
           <p className="text-sm text-muted-foreground">
-            Monitor compliance status across all frameworks
+            Violações de despesa, recibos duplicados e riscos de churn
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export Report
-          </Button>
-          <Button>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Run Audit
-          </Button>
-        </div>
+        <Button variant="outline" onClick={fetchData}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Atualizar
+        </Button>
       </div>
 
-      {/* Stats */}
+      {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg Compliance Score
+              Total de Problemas
             </CardTitle>
-            <Shield className="h-4 w-4 text-chart-1" />
+            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{avgScore}%</div>
-            <Progress value={avgScore} className="mt-2 h-1" />
+            <div className="text-2xl font-bold">{summary.totalIssues}</div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Compliant
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">{stats.compliant}</div>
-            <p className="text-xs text-muted-foreground">
-              of {stats.total} reports
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Non-Compliant
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Críticos</CardTitle>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats.nonCompliant}</div>
-            <p className="text-xs text-muted-foreground">
-              requiring attention
-            </p>
+            <div className="text-2xl font-bold text-destructive">{summary.critical}</div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Critical Issues
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avisos</CardTitle>
             <AlertTriangle className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">{stats.criticalIssues}</div>
-            <p className="text-xs text-muted-foreground">
-              need immediate action
-            </p>
+            <div className="text-2xl font-bold text-warning">{summary.warnings}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Risco de Churn</CardTitle>
+            <TrendingDown className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{riskQueue.length}</div>
+            <p className="text-xs text-muted-foreground">orgs com health score baixo</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="all" className="space-y-4">
+      {/* Abas */}
+      <Tabs defaultValue="violations" className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="all">All Reports</TabsTrigger>
-          <TabsTrigger value="soc2">SOC 2</TabsTrigger>
-          <TabsTrigger value="gdpr">GDPR</TabsTrigger>
-          <TabsTrigger value="hipaa">HIPAA</TabsTrigger>
+          <TabsTrigger value="violations">
+            Violações ({violations.length})
+          </TabsTrigger>
+          <TabsTrigger value="duplicates">
+            Duplicatas ({duplicates.length})
+          </TabsTrigger>
+          <TabsTrigger value="risk">
+            Risco de Churn ({riskQueue.length})
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-4">
-          {complianceReports.map((report) => {
-            const StatusIcon = statusConfig[report.status].icon;
-            return (
-              <Card key={report.id} className="bg-card border-border">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Badge className={frameworkColors[report.framework]}>
-                        {report.framework}
-                      </Badge>
-                      <CardTitle className="text-base">{report.organizationName}</CardTitle>
-                    </div>
-                    <Badge className={statusConfig[report.status].color}>
-                      <StatusIcon className="mr-1 h-3 w-3" />
-                      {report.status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    Last audit: {formatDistanceToNow(new Date(report.lastAuditDate), { addSuffix: true })}
-                    {' | '}
-                    Next audit: {formatDistanceToNow(new Date(report.nextAuditDate), { addSuffix: true })}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Compliance Score</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold">{report.score}%</span>
-                        <Progress value={report.score} className="flex-1 h-2" />
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Issues</p>
-                      <p className="text-2xl font-bold">{report.issues}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Critical Issues</p>
-                      <p className={`text-2xl font-bold ${report.criticalIssues > 0 ? 'text-destructive' : ''}`}>
-                        {report.criticalIssues}
-                      </p>
-                    </div>
-                    <div className="flex items-end justify-end gap-2">
-                      <Button variant="outline" size="sm">
-                        <FileText className="mr-1 h-4 w-4" />
-                        View Report
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </TabsContent>
-
-        <TabsContent value="soc2">
+        <TabsContent value="violations">
           <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              {complianceReports.filter((r) => r.framework === 'SOC2').length === 0 ? (
-                <p className="text-center text-muted-foreground">No SOC 2 reports found.</p>
-              ) : (
-                complianceReports
-                  .filter((r) => r.framework === 'SOC2')
-                  .map((report) => (
-                    <div key={report.id} className="py-2">
-                      <p className="font-medium">{report.organizationName}</p>
-                      <p className="text-sm text-muted-foreground">Score: {report.score}%</p>
-                    </div>
-                  ))
-              )}
+            <CardHeader>
+              <CardTitle className="text-base">Violações de Despesa</CardTitle>
+              <CardDescription>Despesas que violaram políticas da organização</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <IssueTable issues={violations} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="gdpr">
+        <TabsContent value="duplicates">
           <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              {complianceReports.filter((r) => r.framework === 'GDPR').length === 0 ? (
-                <p className="text-center text-muted-foreground">No GDPR reports found.</p>
-              ) : (
-                complianceReports
-                  .filter((r) => r.framework === 'GDPR')
-                  .map((report) => (
-                    <div key={report.id} className="py-2">
-                      <p className="font-medium">{report.organizationName}</p>
-                      <p className="text-sm text-muted-foreground">Score: {report.score}%</p>
-                    </div>
-                  ))
-              )}
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Copy className="h-4 w-4" />
+                Recibos Duplicados
+              </CardTitle>
+              <CardDescription>Recibos enviados mais de uma vez (fingerprint match)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <IssueTable issues={duplicates} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="hipaa">
+        <TabsContent value="risk">
           <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              {complianceReports.filter((r) => r.framework === 'HIPAA').length === 0 ? (
-                <p className="text-center text-muted-foreground">No HIPAA reports found.</p>
-              ) : (
-                complianceReports
-                  .filter((r) => r.framework === 'HIPAA')
-                  .map((report) => (
-                    <div key={report.id} className="py-2">
-                      <p className="font-medium">{report.organizationName}</p>
-                      <p className="text-sm text-muted-foreground">Score: {report.score}%</p>
-                    </div>
-                  ))
-              )}
+            <CardHeader>
+              <CardTitle className="text-base">Fila de Risco de Churn</CardTitle>
+              <CardDescription>Organizações com health score abaixo de 40</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <IssueTable issues={riskQueue} />
             </CardContent>
           </Card>
         </TabsContent>

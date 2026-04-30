@@ -6,7 +6,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft,
-  User,
   Building2,
   Activity,
   Monitor,
@@ -16,8 +15,6 @@ import {
   Ban,
   RotateCcw,
   Trash2,
-  Mail,
-  Phone,
   MapPin,
   Clock,
 } from 'lucide-react';
@@ -187,12 +184,12 @@ export default function MemberDetailPage() {
           </Button>
           <Avatar className="h-16 w-16">
             <AvatarFallback className="text-lg">
-              {member.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              {(member.fullName ?? member.name ?? '').split(' ').map(n => n[0]).join('').slice(0, 2)}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold">{member.fullName}</h1>
+              <h1 className="text-2xl font-semibold">{member.fullName ?? member.name}</h1>
               {member.banned && (
                 <Badge variant="destructive">Banido</Badge>
               )}
@@ -230,7 +227,7 @@ export default function MemberDetailPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Organizações</CardTitle>
           </CardHeader>
           <CardContent>
-            <span className="text-3xl font-bold">{member.orgs.length}</span>
+            <span className="text-3xl font-bold">{member.orgs?.length ?? 0}</span>
           </CardContent>
         </Card>
 
@@ -292,7 +289,7 @@ export default function MemberDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {member.orgs.map((org) => (
+                {(member.orgs ?? []).map((org) => (
                   <div
                     key={org.orgId}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
@@ -375,54 +372,61 @@ export default function MemberDetailPage() {
               <CardDescription>Dispositivos e sessões conectadas</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dispositivo</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>Localização</TableHead>
-                    <TableHead>Última Atividade</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions.map((session) => (
-                    <TableRow key={session.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Monitor className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{session.device}</p>
-                            {session.current && (
-                              <Badge variant="outline" className="text-xs">Sessão atual</Badge>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{session.ip}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {session.location}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {format(new Date(session.lastActive), "dd/MM HH:mm", { locale: ptBR })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {!session.current && (
-                          <Button variant="ghost" size="sm" className="text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
+              {sessions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
+                  <Monitor className="h-10 w-10 opacity-30" />
+                  <p className="text-sm">Informações de sessão não disponíveis via API administrativa.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dispositivo</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Localização</TableHead>
+                      <TableHead>Última Atividade</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {sessions.map((session) => (
+                      <TableRow key={session.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Monitor className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium">{session.device}</p>
+                              {session.current && (
+                                <Badge variant="outline" className="text-xs">Sessão atual</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{session.ip}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {session.location}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {format(new Date(session.lastActive), "dd/MM HH:mm", { locale: ptBR })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {!session.current && (
+                            <Button variant="ghost" size="sm" className="text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

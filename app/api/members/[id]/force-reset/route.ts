@@ -20,7 +20,7 @@ export async function POST(
     }
 
     // Force the user to reset their password by generating a recovery link
-    const { data: linkData, error } = await supabaseAdmin.auth.admin.generateLink({
+    const { error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: authUser.user.email!,
     });

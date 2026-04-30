@@ -73,30 +73,42 @@ const tierColors: Record<OrgTier, string> = {
   free: 'bg-muted text-muted-foreground',
   basic: 'bg-chart-2/20 text-chart-2 border-chart-2/30',
   pro: 'bg-chart-1/20 text-chart-1 border-chart-1/30',
+  enterprise: 'bg-success/20 text-success border-success/30',
 };
 
 const tierLabels: Record<OrgTier, string> = {
   free: 'Gratuito',
   basic: 'Básico',
   pro: 'Pro',
+  enterprise: 'Enterprise',
 };
+
+interface CreateOrgForm {
+  name: string;
+  slug: string;
+  plan: Plan;
+  domain: string;
+}
 
 export default function OrganizationsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateOrgForm>({ name: '', slug: '', plan: 'free', domain: '' });
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const { data: orgsData, isLoading } = useSWR('/api/organizations?limit=100', fetcher);
+  const { data: orgsData, isLoading, mutate } = useSWR('/api/organizations?limit=100', fetcher);
 
-  const organizations: Organization[] = (orgsData?.data?.items ?? []).map((o: any) => ({
-    ...o,
+  const organizations: Organization[] = (orgsData?.data?.items ?? []).map((o: Record<string, unknown>) => ({
+    ...(o as unknown as Organization),
     tier: (o.plan ?? o.tier) as OrgTier,
-    memberCount: o.member_count ?? o.memberCount ?? 0,
-    healthScore: o.health_score ?? o.healthScore ?? 0,
-    lastActiveAt: o.last_active_at ?? o.lastActiveAt ?? o.created_at,
-    mrr: o.mrr ?? 0,
-    featureFlags: o.feature_flags ?? o.featureFlags ?? [],
-    complianceScore: o.compliance_score ?? o.complianceScore ?? 0,
+    memberCount: (o.member_count as number) ?? (o.memberCount as number) ?? 0,
+    healthScore: (o.health_score as number) ?? (o.healthScore as number) ?? 0,
+    lastActiveAt: (o.last_active_at as string) ?? (o.lastActiveAt as string) ?? (o.created_at as string),
+    mrr: (o.mrr as number) ?? 0,
+    featureFlags: (o.feature_flags as string[]) ?? (o.featureFlags as string[]) ?? [],
+    complianceScore: (o.compliance_score as number) ?? (o.complianceScore as number) ?? 0,
   }));
 
   const stats = {
@@ -105,6 +117,42 @@ export default function OrganizationsPage() {
     totalMRR: organizations.reduce((s, o) => s + (o.mrr ?? 0), 0),
     totalMembers: organizations.reduce((s, o) => s + (o.memberCount ?? 0), 0),
   };
+
+  function autoSlug(name: string) {
+    return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  async function handleCreate() {
+    setCreateError(null);
+    if (!createForm.name.trim()) { setCreateError('Nome é obrigatório'); return; }
+    if (!createForm.slug.trim()) { setCreateError('Slug é obrigatório'); return; }
+
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: createForm.name,
+          slug: createForm.slug,
+          plan: createForm.plan,
+          domain: createForm.domain || undefined,
+        }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setCreateDialogOpen(false);
+        setCreateForm({ name: '', slug: '', plan: 'free', domain: '' });
+        mutate();
+      } else {
+        setCreateError(result.error ?? 'Erro ao criar organização');
+      }
+    } catch {
+      setCreateError('Erro de conexão. Tente novamente.');
+    } finally {
+      setIsCreating(false);
+    }
+  }
 
   const columns = [
     {
@@ -258,7 +306,7 @@ export default function OrganizationsPage() {
             Gerencie todas as organizações da plataforma
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
+        <Button onClick={() => { setCreateError(null); setCreateDialogOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Organização
         </Button>
@@ -343,37 +391,65 @@ export default function OrganizationsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {createError && (
+              <p className="text-sm text-destructive">{createError}</p>
+            )}
             <div className="grid gap-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input id="name" placeholder="Nome da organização" />
+              <Label htmlFor="create-name">Nome</Label>
+              <Input
+                id="create-name"
+                placeholder="Nome da organização"
+                value={createForm.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setCreateForm((f) => ({ ...f, name, slug: autoSlug(name) }));
+                }}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="slug">Slug</Label>
-              <Input id="slug" placeholder="slug-da-organizacao" />
+              <Label htmlFor="create-slug">Slug</Label>
+              <Input
+                id="create-slug"
+                placeholder="slug-da-organizacao"
+                value={createForm.slug}
+                onChange={(e) => setCreateForm((f) => ({ ...f, slug: e.target.value }))}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="tier">Plano</Label>
-              <Select>
-                <SelectTrigger>
+              <Label htmlFor="create-plan">Plano</Label>
+              <Select
+                value={createForm.plan}
+                onValueChange={(v) => setCreateForm((f) => ({ ...f, plan: v as Plan }))}
+              >
+                <SelectTrigger id="create-plan">
                   <SelectValue placeholder="Selecione o plano" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Gratuito</SelectItem>
                   <SelectItem value="basic">Básico</SelectItem>
                   <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="domain">Domínio</Label>
-              <Input id="domain" placeholder="exemplo.com.br" />
+              <Label htmlFor="create-domain">Domínio (opcional)</Label>
+              <Input
+                id="create-domain"
+                placeholder="exemplo.com.br"
+                value={createForm.domain}
+                onChange={(e) => setCreateForm((f) => ({ ...f, domain: e.target.value }))}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={isCreating}>
               Cancelar
             </Button>
-            <Button onClick={() => setCreateDialogOpen(false)}>Criar</Button>
+            <Button onClick={handleCreate} disabled={isCreating}>
+              {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

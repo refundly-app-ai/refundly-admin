@@ -8,17 +8,13 @@ import {
   User,
   Shield,
   Key,
-  Monitor,
   Download,
   RotateCcw,
-  Trash2,
   Loader2,
   Eye,
   EyeOff,
   Copy,
   Check,
-  MapPin,
-  Clock,
   AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,14 +23,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -45,108 +33,86 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-interface Session {
+interface AdminData {
   id: string;
-  device: string;
-  ip: string;
-  location: string;
-  lastActive: string;
-  current: boolean;
+  email: string;
+  fullName: string;
+  totpEnabled: boolean;
+  lastLoginAt: string | null;
 }
 
-// Mock current admin
-const mockAdmin = {
-  id: 'admin_1',
-  email: 'admin@example.com',
-  fullName: 'Super Admin',
-  totpEnabled: true,
-  lastLoginAt: new Date().toISOString(),
-};
-
-// Mock sessions
-const mockSessions: Session[] = [
-  {
-    id: 'sess_1',
-    device: 'Chrome on macOS',
-    ip: '192.168.1.1',
-    location: 'São Paulo, BR',
-    lastActive: new Date().toISOString(),
-    current: true,
-  },
-  {
-    id: 'sess_2',
-    device: 'Safari on iOS',
-    ip: '192.168.1.2',
-    location: 'São Paulo, BR',
-    lastActive: new Date(Date.now() - 3600000).toISOString(),
-    current: false,
-  },
-  {
-    id: 'sess_3',
-    device: 'Firefox on Windows',
-    ip: '10.0.0.1',
-    location: 'Rio de Janeiro, BR',
-    lastActive: new Date(Date.now() - 86400000).toISOString(),
-    current: false,
-  },
-];
-
-// Mock recovery codes
-const mockRecoveryCodes = [
-  'AAAA1111BBBB',
-  'CCCC2222DDDD',
-  'EEEE3333FFFF',
-  'GGGG4444HHHH',
-  'IIII5555JJJJ',
-];
-
 export default function SettingsProfilePage() {
-  const [admin] = useState(mockAdmin);
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
-  const [recoveryCodes, setRecoveryCodes] = useState<string[]>(mockRecoveryCodes);
+  const [admin, setAdmin] = useState<AdminData | null>(null);
+  const [isLoadingAdmin, setIsLoadingAdmin] = useState(true);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
 
-  // Password change
+  // Troca de senha
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // 2FA regenerate
+  // 2FA
   const [regenerate2FADialog, setRegenerate2FADialog] = useState(false);
   const [newTotpUri, setNewTotpUri] = useState('');
   const [newTotpSecret, setNewTotpSecret] = useState('');
+  const [newRecoveryCodes, setNewRecoveryCodes] = useState<string[]>([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Recovery codes
+  // Códigos de recuperação
   const [regenerateCodesDialog, setRegenerateCodesDialog] = useState(false);
-  const [newRecoveryCodes, setNewRecoveryCodes] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) setAdmin(result.data);
+      })
+      .finally(() => setIsLoadingAdmin(false));
+  }, []);
 
   async function handleChangePassword() {
     if (newPassword !== confirmPassword) return;
     setIsChangingPassword(true);
+    setPasswordError('');
+    setPasswordSuccess(false);
 
-    // Simulate password change
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const result = await res.json();
 
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setIsChangingPassword(false);
+      if (result.ok) {
+        setPasswordSuccess(true);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordError(result.error || 'Erro ao alterar senha');
+      }
+    } catch {
+      setPasswordError('Erro de conexão');
+    } finally {
+      setIsChangingPassword(false);
+    }
   }
 
   async function handleRegenerate2FA() {
     setIsRegenerating(true);
-
     try {
       const res = await fetch('/api/auth/setup-2fa');
       const result = await res.json();
-
       if (result.ok) {
         setNewTotpUri(result.data.uri);
         setNewTotpSecret(result.data.secret);
-        setNewRecoveryCodes(result.data.recoveryCodes);
+        setNewRecoveryCodes(result.data.recoveryCodes ?? []);
         setRegenerate2FADialog(true);
       }
     } finally {
@@ -154,24 +120,30 @@ export default function SettingsProfilePage() {
     }
   }
 
+  const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
+  const [recoveryCodesError, setRecoveryCodesError] = useState('');
+
   async function handleRegenerateRecoveryCodes() {
-    // Generate new codes
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const codes: string[] = [];
-    for (let i = 0; i < 10; i++) {
-      let code = '';
-      for (let j = 0; j < 12; j++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    setIsRegeneratingCodes(true);
+    setRecoveryCodesError('');
+    try {
+      const res = await fetch('/api/auth/regenerate-recovery-codes', { method: 'POST' });
+      const result = await res.json();
+      if (result.ok) {
+        setNewRecoveryCodes(result.data.codes);
+        setRegenerateCodesDialog(true);
+      } else {
+        setRecoveryCodesError(result.error || 'Erro ao regenerar códigos');
       }
-      codes.push(code);
+    } catch {
+      setRecoveryCodesError('Erro de conexão');
+    } finally {
+      setIsRegeneratingCodes(false);
     }
-    setNewRecoveryCodes(codes);
-    setRegenerateCodesDialog(true);
   }
 
   function downloadRecoveryCodes(codes: string[]) {
-    const content = codes.join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([codes.join('\n')], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -188,19 +160,23 @@ export default function SettingsProfilePage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleRevokeSession(sessionId: string) {
-    setSessions(sessions.filter(s => s.id !== sessionId));
+  if (isLoadingAdmin) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header */}
+      {/* Cabeçalho */}
       <div>
         <h1 className="text-2xl font-semibold">Meu Perfil</h1>
         <p className="text-muted-foreground">Gerencie suas configurações de conta e segurança</p>
       </div>
 
-      {/* Profile Info */}
+      {/* Informações do Perfil */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -212,16 +188,16 @@ export default function SettingsProfilePage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-muted-foreground">Nome</Label>
-              <p className="font-medium">{admin.fullName}</p>
+              <p className="font-medium">{admin?.fullName ?? '—'}</p>
             </div>
             <div>
               <Label className="text-muted-foreground">E-mail</Label>
-              <p className="font-medium">{admin.email}</p>
+              <p className="font-medium">{admin?.email ?? '—'}</p>
             </div>
             <div>
               <Label className="text-muted-foreground">Último Login</Label>
               <p className="font-medium">
-                {admin.lastLoginAt
+                {admin?.lastLoginAt
                   ? format(new Date(admin.lastLoginAt), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
                   : 'Nunca'}
               </p>
@@ -229,7 +205,7 @@ export default function SettingsProfilePage() {
             <div>
               <Label className="text-muted-foreground">2FA</Label>
               <div className="flex items-center gap-2">
-                {admin.totpEnabled ? (
+                {admin?.totpEnabled ? (
                   <Badge className="bg-success/10 text-success">
                     <Shield className="h-3 w-3 mr-1" />
                     Ativo
@@ -245,7 +221,7 @@ export default function SettingsProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Change Password */}
+      {/* Alterar Senha */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -301,17 +277,19 @@ export default function SettingsProfilePage() {
           {newPassword && confirmPassword && newPassword !== confirmPassword && (
             <p className="text-sm text-destructive">As senhas não coincidem</p>
           )}
+          {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+          {passwordSuccess && <p className="text-sm text-success">Senha alterada com sucesso!</p>}
           <Button
             onClick={handleChangePassword}
             disabled={!currentPassword || !newPassword || newPassword !== confirmPassword || isChangingPassword}
           >
-            {isChangingPassword ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {isChangingPassword && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Alterar Senha
           </Button>
         </CardContent>
       </Card>
 
-      {/* 2FA Settings */}
+      {/* 2FA */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -325,7 +303,7 @@ export default function SettingsProfilePage() {
             <div>
               <p className="font-medium">Autenticador TOTP</p>
               <p className="text-sm text-muted-foreground">
-                Use um aplicativo como Google Authenticator ou Authy
+                Use Google Authenticator, Authy ou similar
               </p>
             </div>
             <Button variant="outline" onClick={handleRegenerate2FA} disabled={isRegenerating}>
@@ -341,98 +319,41 @@ export default function SettingsProfilePage() {
               <div>
                 <p className="font-medium">Códigos de Recuperação</p>
                 <p className="text-sm text-muted-foreground">
-                  {recoveryCodes.length} códigos restantes
+                  {recoveryCodes.length > 0 ? `${recoveryCodes.length} códigos disponíveis` : 'Gerados no primeiro login'}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => downloadRecoveryCodes(recoveryCodes)}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Baixar
-                </Button>
-                <Button variant="outline" onClick={handleRegenerateRecoveryCodes}>
-                  <RotateCcw className="h-4 w-4 mr-2" />
+                {recoveryCodes.length > 0 && (
+                  <Button variant="outline" onClick={() => downloadRecoveryCodes(recoveryCodes)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Baixar
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleRegenerateRecoveryCodes} disabled={isRegeneratingCodes}>
+                  {isRegeneratingCodes ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                  )}
                   Regenerar
                 </Button>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-4 bg-muted rounded-lg">
-              {recoveryCodes.map((code, i) => (
-                <code key={i} className="text-sm font-mono text-center py-1">
-                  {code}
-                </code>
-              ))}
-            </div>
+            {recoveryCodesError && (
+              <p className="text-sm text-destructive mt-2">{recoveryCodesError}</p>
+            )}
+            {recoveryCodes.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-4 bg-muted rounded-lg">
+                {recoveryCodes.map((code, i) => (
+                  <code key={i} className="text-sm font-mono text-center py-1">{code}</code>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Active Sessions */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Monitor className="h-5 w-5" />
-            <CardTitle>Sessões Ativas</CardTitle>
-          </div>
-          <CardDescription>Dispositivos conectados à sua conta</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Dispositivo</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Localização</TableHead>
-                <TableHead>Última Atividade</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Monitor className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">{session.device}</p>
-                        {session.current && (
-                          <Badge variant="outline" className="text-xs">Sessão atual</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{session.ip}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      {session.location}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {format(new Date(session.lastActive), "dd/MM HH:mm", { locale: ptBR })}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {!session.current && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => handleRevokeSession(session.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Regenerate 2FA Dialog */}
+      {/* Dialog: Regenerar QR Code 2FA */}
       <Dialog open={regenerate2FADialog} onOpenChange={setRegenerate2FADialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -445,53 +366,53 @@ export default function SettingsProfilePage() {
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                Seu QR code anterior será invalidado. Certifique-se de atualizar seu autenticador.
+                Seu QR code anterior será invalidado. Atualize seu autenticador agora.
               </AlertDescription>
             </Alert>
-            <div className="flex justify-center">
-              <div className="bg-white p-4 rounded-lg">
-                <QRCodeSVG value={newTotpUri} size={180} />
+            {newTotpUri && (
+              <div className="flex justify-center">
+                <div className="bg-white p-4 rounded-lg">
+                  <QRCodeSVG value={newTotpUri} size={180} />
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Código manual:</Label>
-              <div className="flex gap-2">
-                <Input readOnly value={newTotpSecret} className="font-mono text-sm" />
-                <Button variant="outline" size="icon" onClick={copySecret}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            )}
+            {newTotpSecret && (
+              <div className="space-y-2">
+                <Label>Código manual:</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={newTotpSecret} className="font-mono text-sm" />
+                  <Button variant="outline" size="icon" onClick={copySecret}>
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <DialogFooter>
-            <Button onClick={() => setRegenerate2FADialog(false)}>
-              Concluído
-            </Button>
+            <Button onClick={() => setRegenerate2FADialog(false)}>Concluído</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Regenerate Recovery Codes Dialog */}
+      {/* Dialog: Regenerar Códigos de Recuperação */}
       <Dialog open={regenerateCodesDialog} onOpenChange={setRegenerateCodesDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Novos Códigos de Recuperação</DialogTitle>
             <DialogDescription>
-              Seus códigos antigos foram invalidados. Salve estes novos códigos em um lugar seguro.
+              Seus códigos antigos foram invalidados. Salve estes em um lugar seguro.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                Guarde estes códigos em um lugar seguro. Eles não serão mostrados novamente.
+                Estes códigos não serão mostrados novamente.
               </AlertDescription>
             </Alert>
             <div className="grid grid-cols-2 gap-2 p-4 bg-muted rounded-lg">
               {newRecoveryCodes.map((code, i) => (
-                <code key={i} className="text-sm font-mono text-center py-1">
-                  {code}
-                </code>
+                <code key={i} className="text-sm font-mono text-center py-1">{code}</code>
               ))}
             </div>
           </div>

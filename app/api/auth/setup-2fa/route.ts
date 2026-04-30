@@ -4,7 +4,7 @@ import { generateTOTPSecret } from '@/lib/auth/totp';
 import { generateRecoveryCodes } from '@/lib/auth/password';
 import { findAdminById } from '@/lib/db/admins';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getSession();
 

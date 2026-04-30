@@ -46,6 +46,7 @@ import {
   Key,
   UserCog,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -78,32 +79,59 @@ const roleLabels: Record<MemberRole, string> = {
   viewer: 'Visualizador',
 };
 
+interface InviteForm {
+  email: string;
+  fullName: string;
+  orgId: string;
+  role: MemberRole;
+}
+
+interface EditForm {
+  fullName: string;
+  email: string;
+  role: MemberRole;
+}
+
 export default function MembersPage() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { data: membersData, isLoading: membersLoading } = useSWR('/api/members?limit=100', fetcher);
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', fullName: '', orgId: '', role: 'member' });
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
+
+  const [editForm, setEditForm] = useState<EditForm>({ fullName: '', email: '', role: 'member' });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [impersonateReason, setImpersonateReason] = useState('');
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+  const [impersonateLink, setImpersonateLink] = useState<string | null>(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+
+  const { data: membersData, isLoading: membersLoading, mutate } = useSWR('/api/members?limit=100', fetcher);
   const { data: orgsData } = useSWR('/api/organizations?limit=100', fetcher);
 
-  const members: Member[] = (membersData?.data?.items ?? []).map((m: any) => ({
-    id: m.id,
-    email: m.email,
-    name: m.fullName || m.email,
-    fullName: m.fullName,
-    organizationId: m.orgId,
-    organizationName: m.orgName,
-    role: m.role as MemberRole,
+  const members: Member[] = (membersData?.data?.items ?? []).map((m: Record<string, unknown>): Member => ({
+    id: m.id as string,
+    email: m.email as string,
+    name: (m.fullName as string) || (m.email as string),
+    fullName: m.fullName as string | undefined,
+    organizationId: m.orgId as string | undefined,
+    organizationName: m.orgName as string | undefined,
+    role: m.role as MemberRole | undefined,
     status: (m.banned ? 'suspended' : 'active') as MemberStatus,
-    banned: m.banned ?? false,
-    mfaEnabled: m.whatsappVerified ?? false,
+    banned: (m.banned as boolean) ?? false,
+    mfaEnabled: (m.whatsappVerified as boolean) ?? false,
     createdAt: new Date().toISOString(),
   }));
 
-  const orgList: Array<{ id: string; name: string }> = (orgsData?.data?.items ?? []).map((o: any) => ({
-    id: o.id,
-    name: o.name,
+  const orgList: Array<{ id: string; name: string }> = (orgsData?.data?.items ?? []).map((o: Record<string, unknown>) => ({
+    id: String(o.id ?? ''),
+    name: String(o.name ?? ''),
   }));
 
   const stats = {
@@ -112,6 +140,115 @@ export default function MembersPage() {
     mfaEnabled: members.filter((m) => m.mfaEnabled).length,
     admins: members.filter((m) => m.role === 'admin' || m.role === 'owner').length,
   };
+
+  async function handleInvite() {
+    setInviteError(null);
+    if (!inviteForm.email) { setInviteError('E-mail é obrigatório'); return; }
+    if (!inviteForm.fullName) { setInviteError('Nome é obrigatório'); return; }
+    if (!inviteForm.orgId) { setInviteError('Selecione uma organização'); return; }
+
+    setIsInviting(true);
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteForm),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setInviteDialogOpen(false);
+        setInviteForm({ email: '', fullName: '', orgId: '', role: 'member' });
+        mutate();
+      } else {
+        setInviteError(result.error ?? 'Erro ao convidar membro');
+      }
+    } catch {
+      setInviteError('Erro de conexão. Tente novamente.');
+    } finally {
+      setIsInviting(false);
+    }
+  }
+
+  function openEditDialog(member: Member) {
+    setEditForm({ fullName: member.fullName ?? member.name ?? '', email: member.email, role: member.role ?? 'member' });
+    setEditError(null);
+    setSelectedMember(member);
+    setEditDialogOpen(true);
+  }
+
+  async function handleEdit() {
+    if (!selectedMember) return;
+    setEditError(null);
+
+    setIsEditing(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (editForm.fullName && editForm.fullName !== (selectedMember.fullName ?? selectedMember.name)) {
+        body.fullName = editForm.fullName;
+      }
+      if (editForm.email && editForm.email !== selectedMember.email) {
+        body.email = editForm.email;
+      }
+      if (editForm.role && editForm.role !== selectedMember.role) {
+        body.role = editForm.role;
+        body.orgId = selectedMember.organizationId;
+      }
+
+      if (Object.keys(body).length === 0) {
+        setEditDialogOpen(false);
+        return;
+      }
+
+      const res = await fetch(`/api/members/${selectedMember.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setEditDialogOpen(false);
+        mutate();
+      } else {
+        setEditError(result.error ?? 'Erro ao editar membro');
+      }
+    } catch {
+      setEditError('Erro de conexão. Tente novamente.');
+    } finally {
+      setIsEditing(false);
+    }
+  }
+
+  function openImpersonateDialog(member: Member) {
+    setSelectedMember(member);
+    setImpersonateReason('');
+    setImpersonateError(null);
+    setImpersonateLink(null);
+    setImpersonateDialogOpen(true);
+  }
+
+  async function handleImpersonate() {
+    if (!selectedMember) return;
+    setImpersonateError(null);
+
+    setIsImpersonating(true);
+    try {
+      const res = await fetch(`/api/members/${selectedMember.id}/impersonate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: impersonateReason }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setImpersonateLink(result.data.link);
+      } else {
+        setImpersonateError(result.error ?? 'Erro ao iniciar personificação');
+      }
+    } catch {
+      setImpersonateError('Erro de conexão. Tente novamente.');
+    } finally {
+      setIsImpersonating(false);
+    }
+  }
 
   const columns = [
     {
@@ -193,16 +330,11 @@ export default function MembersPage() {
               <Eye className="mr-2 h-4 w-4" />
               Ver Detalhes
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openEditDialog(member)}>
               <Edit className="mr-2 h-4 w-4" />
               Editar
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedMember(member);
-                setImpersonateDialogOpen(true);
-              }}
-            >
+            <DropdownMenuItem onClick={() => openImpersonateDialog(member)}>
               <UserCog className="mr-2 h-4 w-4" />
               Personificar
             </DropdownMenuItem>
@@ -234,16 +366,6 @@ export default function MembersPage() {
 
   const filters = [
     {
-      key: 'status',
-      label: 'Status',
-      options: [
-        { value: 'active', label: 'Ativo' },
-        { value: 'invited', label: 'Convidado' },
-        { value: 'suspended', label: 'Suspenso' },
-        { value: 'deactivated', label: 'Desativado' },
-      ],
-    },
-    {
       key: 'role',
       label: 'Papel',
       options: [
@@ -251,6 +373,14 @@ export default function MembersPage() {
         { value: 'admin', label: 'Admin' },
         { value: 'member', label: 'Membro' },
         { value: 'viewer', label: 'Visualizador' },
+      ],
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      options: [
+        { value: 'active', label: 'Ativo' },
+        { value: 'suspended', label: 'Suspenso' },
       ],
     },
   ];
@@ -264,7 +394,7 @@ export default function MembersPage() {
             Gerencie todos os membros da plataforma
           </p>
         </div>
-        <Button onClick={() => setInviteDialogOpen(true)}>
+        <Button onClick={() => { setInviteError(null); setInviteDialogOpen(true); }}>
           <UserPlus className="mr-2 h-4 w-4" />
           Convidar Membro
         </Button>
@@ -286,9 +416,7 @@ export default function MembersPage() {
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ativos
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Ativos</CardTitle>
             <CheckCircle className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
@@ -297,26 +425,17 @@ export default function MembersPage() {
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              WhatsApp Verificado
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">WhatsApp Verificado</CardTitle>
             <Shield className="h-4 w-4 text-chart-1" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{membersLoading ? '—' : stats.mfaEnabled}</div>
-            {!membersLoading && stats.total > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {Math.round((stats.mfaEnabled / stats.total) * 100)}% do total
-              </p>
-            )}
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Admins e Proprietários
-            </CardTitle>
-            <UserCog className="h-4 w-4 text-chart-3" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
+            <Key className="h-4 w-4 text-chart-3" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{membersLoading ? '—' : stats.admins}</div>
@@ -348,34 +467,54 @@ export default function MembersPage() {
           <DialogHeader>
             <DialogTitle>Convidar Membro</DialogTitle>
             <DialogDescription>
-              Envie um convite para um novo membro.
+              Adicione um novo membro a uma organização.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
             <div className="grid gap-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input id="email" type="email" placeholder="email@exemplo.com" />
+              <Label htmlFor="invite-email">E-mail</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="nome@empresa.com"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="organization">Organização</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma organização" />
+              <Label htmlFor="invite-name">Nome Completo</Label>
+              <Input
+                id="invite-name"
+                placeholder="Nome do membro"
+                value={inviteForm.fullName}
+                onChange={(e) => setInviteForm((f) => ({ ...f, fullName: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="invite-org">Organização</Label>
+              <Select
+                value={inviteForm.orgId}
+                onValueChange={(v) => setInviteForm((f) => ({ ...f, orgId: v }))}
+              >
+                <SelectTrigger id="invite-org">
+                  <SelectValue placeholder="Selecione a organização" />
                 </SelectTrigger>
                 <SelectContent>
                   {orgList.map((org) => (
-                    <SelectItem key={org.id} value={org.id}>
-                      {org.name}
-                    </SelectItem>
+                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="role">Papel</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um papel" />
+              <Label htmlFor="invite-role">Papel</Label>
+              <Select
+                value={inviteForm.role}
+                onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v as MemberRole }))}
+              >
+                <SelectTrigger id="invite-role">
+                  <SelectValue placeholder="Selecione o papel" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
@@ -386,10 +525,13 @@ export default function MembersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setInviteDialogOpen(false)} disabled={isInviting}>
               Cancelar
             </Button>
-            <Button onClick={() => setInviteDialogOpen(false)}>Enviar Convite</Button>
+            <Button onClick={handleInvite} disabled={isInviting}>
+              {isInviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar Convite
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -437,13 +579,74 @@ export default function MembersPage() {
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
               Fechar
             </Button>
-            <Button>Editar Membro</Button>
+            <Button onClick={() => { setDetailsDialogOpen(false); if (selectedMember) openEditDialog(selectedMember); }}>
+              Editar Membro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar Membro */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Membro</DialogTitle>
+            <DialogDescription>{selectedMember?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Nome Completo</Label>
+              <Input
+                id="edit-name"
+                value={editForm.fullName}
+                onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-email">E-mail</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role">Papel na Organização</Label>
+              <Select
+                value={editForm.role}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, role: v as MemberRole }))}
+              >
+                <SelectTrigger id="edit-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owner">Proprietário</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="member">Membro</SelectItem>
+                  <SelectItem value="viewer">Visualizador</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isEditing}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEdit} disabled={isEditing}>
+              {isEditing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Dialog: Personificar */}
-      <Dialog open={impersonateDialogOpen} onOpenChange={setImpersonateDialogOpen}>
+      <Dialog open={impersonateDialogOpen} onOpenChange={(open) => {
+        setImpersonateDialogOpen(open);
+        if (!open) { setImpersonateLink(null); setImpersonateReason(''); setImpersonateError(null); }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Personificar Usuário</DialogTitle>
@@ -451,27 +654,59 @@ export default function MembersPage() {
               Você está prestes a personificar {selectedMember?.name}. Esta ação será registrada.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="reason">Motivo da personificação</Label>
-              <Input id="reason" placeholder="Ticket de suporte #1234" />
+
+          {impersonateLink ? (
+            <div className="grid gap-4 py-4">
+              <div className="rounded-lg border border-success/50 bg-success/10 p-3">
+                <p className="text-sm text-success font-medium mb-2">Link gerado com sucesso</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Este link expira em 1 hora e concede acesso como o usuário. Abra em uma janela anônima.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => window.open(impersonateLink, '_blank')}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Abrir como {selectedMember?.name}
+                </Button>
+              </div>
             </div>
-            <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
-              <p className="text-sm text-warning">
-                Sessões de personificação são registradas e auditadas. Use este recurso apenas para fins legítimos de suporte.
-              </p>
+          ) : (
+            <div className="grid gap-4 py-4">
+              {impersonateError && <p className="text-sm text-destructive">{impersonateError}</p>}
+              <div className="grid gap-2">
+                <Label htmlFor="impersonate-reason">Motivo da personificação</Label>
+                <Input
+                  id="impersonate-reason"
+                  placeholder="Ticket de suporte #1234"
+                  value={impersonateReason}
+                  onChange={(e) => setImpersonateReason(e.target.value)}
+                />
+              </div>
+              <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
+                <p className="text-sm text-warning">
+                  Sessões de personificação são registradas e auditadas. Use este recurso apenas para fins legítimos de suporte.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setImpersonateDialogOpen(false)}>
-              Cancelar
+              {impersonateLink ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button
-              className="bg-warning text-warning-foreground hover:bg-warning/90"
-              onClick={() => setImpersonateDialogOpen(false)}
-            >
-              Iniciar Personificação
-            </Button>
+            {!impersonateLink && (
+              <Button
+                className="bg-warning text-warning-foreground hover:bg-warning/90"
+                onClick={handleImpersonate}
+                disabled={!impersonateReason.trim() || isImpersonating}
+              >
+                {isImpersonating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Iniciar Personificação
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

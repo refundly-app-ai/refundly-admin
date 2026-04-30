@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -110,7 +109,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <UserPlus className="mr-2 h-4 w-4" />
             Invite Member
           </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/settings/feature-flags'))}>
+          <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/settings'))}>
             <Flag className="mr-2 h-4 w-4" />
             Manage Feature Flags
           </CommandItem>

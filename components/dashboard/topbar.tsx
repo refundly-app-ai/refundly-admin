@@ -1,7 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { Bell, Search, User, LogOut, Settings, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import {
+  Bell,
+  Search,
+  User,
+  LogOut,
+  Settings,
+  Shield,
+  Loader2,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,24 +25,79 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { currentAdmin } from '@/lib/mock-data';
 import { ThemeToggle } from './theme-toggle';
+
+interface AdminData {
+  id: string;
+  email: string;
+  fullName: string;
+  totpEnabled: boolean;
+  lastLoginAt: string | null;
+}
+
+interface Notification {
+  id: string;
+  type: 'org' | 'billing' | 'security' | 'compliance' | 'system';
+  title: string;
+  description?: string;
+  severity: 'info' | 'warning' | 'critical';
+  createdAt: string;
+  link?: string;
+}
 
 interface TopbarProps {
   onOpenCommandPalette: () => void;
 }
 
 export function Topbar({ onOpenCommandPalette }: TopbarProps) {
-  const [notifications] = useState([
-    { id: 1, title: 'Nova organização cadastrada', time: 'há 2 min' },
-    { id: 2, title: 'Alerta de conformidade: HealthCare Plus', time: 'há 15 min' },
-    { id: 3, title: 'Pagamento falhou: RetailMax', time: 'há 1 hora' },
-  ]);
+  const router = useRouter();
+  const [admin, setAdmin] = useState<AdminData | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) setAdmin(result.data);
+      })
+      .catch(() => {});
+
+    fetch('/api/notifications')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) setNotifications(result.data ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
+  const initials = admin?.fullName
+    ? admin.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
+  const severityIcon = (severity: Notification['severity']) => {
+    switch (severity) {
+      case 'critical':
+        return <AlertTriangle className="h-3.5 w-3.5 text-destructive" />;
+      case 'warning':
+        return <AlertTriangle className="h-3.5 w-3.5 text-warning" />;
+      default:
+        return <Info className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4">
-      {/* Search */}
       <Button
         variant="outline"
         className="w-64 justify-start gap-2 text-muted-foreground"
@@ -42,19 +110,16 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
         </kbd>
       </Button>
 
-      {/* Right side */}
       <div className="flex items-center gap-2">
-        {/* Theme Toggle */}
         <ThemeToggle />
-        
-        {/* Notifications */}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
               {notifications.length > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-                  {notifications.length}
+                  {notifications.length > 9 ? '9+' : notifications.length}
                 </span>
               )}
             </Button>
@@ -62,56 +127,93 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel>Notificações</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {notifications.map((notification) => (
-              <DropdownMenuItem key={notification.id} className="flex flex-col items-start gap-1 py-3">
-                <span className="text-sm font-medium">{notification.title}</span>
-                <span className="text-xs text-muted-foreground">{notification.time}</span>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center text-sm font-medium">
-              Ver todas as notificações
-            </DropdownMenuItem>
+            {notifications.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma notificação recente
+              </div>
+            ) : (
+              notifications.slice(0, 8).map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="flex items-start gap-2 py-3 cursor-pointer"
+                  onClick={() => n.link && router.push(n.link)}
+                >
+                  <div className="mt-0.5">{severityIcon(n.severity)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{n.title}</p>
+                    {n.description && (
+                      <p className="text-xs text-muted-foreground truncate">{n.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ptBR })}
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              ))
+            )}
+            {notifications.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="justify-center text-sm font-medium"
+                  onClick={() => router.push('/dashboard/audit')}
+                >
+                  Ver tudo no log de auditoria
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 px-2">
               <Avatar className="h-7 w-7">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {currentAdmin.name.split(' ').map(n => n[0]).join('')}
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden flex-col items-start md:flex">
-                <span className="text-sm font-medium">{currentAdmin.name}</span>
-                <span className="text-xs text-muted-foreground">{currentAdmin.role.replace('_', ' ')}</span>
+                {admin ? (
+                  <>
+                    <span className="text-sm font-medium">{admin.fullName}</span>
+                    <span className="text-xs text-muted-foreground">Super Admin</span>
+                  </>
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
               </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="flex flex-col">
-              <span>{currentAdmin.name}</span>
-              <span className="text-xs font-normal text-muted-foreground">{currentAdmin.email}</span>
+              <span>{admin?.fullName ?? '...'}</span>
+              <span className="text-xs font-normal text-muted-foreground">{admin?.email ?? ''}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/profile')}>
               <User className="mr-2 h-4 w-4" />
               Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/admins')}>
+              <Shield className="mr-2 h-4 w-4" />
+              Administradores
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Configurações
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Shield className="mr-2 h-4 w-4" />
-              Segurança
-              <Badge variant="secondary" className="ml-auto text-xs">2FA Ativo</Badge>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>

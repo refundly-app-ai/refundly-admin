@@ -31,10 +31,10 @@ export function MRRChart({ data }: MRRChartProps) {
   return (
     <Card className="col-span-2 bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">Monthly Recurring Revenue</CardTitle>
+        <CardTitle className="text-base font-medium">Receita Recorrente Mensal</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-75">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
@@ -90,10 +90,10 @@ export function SignupsChart({ data }: SignupsChartProps) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">New Signups</CardTitle>
+        <CardTitle className="text-base font-medium">Novos Cadastros</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-75">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0 0)" vertical={false} />
@@ -117,7 +117,7 @@ export function SignupsChart({ data }: SignupsChartProps) {
                   borderRadius: '8px',
                   color: 'oklch(0.95 0 0)',
                 }}
-                formatter={(value: number) => [value, 'Signups']}
+                formatter={(value: number) => [value, 'Cadastros']}
               />
               <Bar
                 dataKey="value"
@@ -142,10 +142,10 @@ export function TierDistributionChart({ data }: TierDistributionChartProps) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">Tier Distribution</CardTitle>
+        <CardTitle className="text-base font-medium">Distribuição por Plano</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-75">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -198,10 +198,10 @@ export function RequestsChart({ data }: RequestsChartProps) {
   return (
     <Card className="col-span-2 bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">API Requests (Last 24h)</CardTitle>
+        <CardTitle className="text-base font-medium">Requisições de API (Últimas 24h)</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[200px]">
+        <div className="h-50">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0 0)" vertical={false} />
@@ -227,7 +227,7 @@ export function RequestsChart({ data }: RequestsChartProps) {
                   borderRadius: '8px',
                   color: 'oklch(0.95 0 0)',
                 }}
-                formatter={(value: number) => [value.toLocaleString(), 'Requests']}
+                formatter={(value: number) => [value.toLocaleString('pt-BR'), 'Requisições']}
               />
               <Line
                 type="monotone"

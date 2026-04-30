@@ -58,14 +58,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Organization, Member, Activity as ActivityType, BillingEvent, IntegrationStatus } from '@/lib/types';
+import { Organization, Member, Activity as ActivityType, BillingEvent, Integration } from '@/lib/types';
 
 interface OrgDetailData {
   organization: Organization;
   members: Member[];
   activities: ActivityType[];
   billingEvents: BillingEvent[];
-  integrations: IntegrationStatus[];
+  integrations: Integration[];
 }
 
 const statusConfig = {
@@ -73,12 +73,14 @@ const statusConfig = {
   suspended: { label: 'Suspenso', variant: 'secondary' as const, className: 'bg-warning/10 text-warning border-warning/20' },
   blocked: { label: 'Bloqueado', variant: 'destructive' as const, className: 'bg-destructive/10 text-destructive border-destructive/20' },
   churned: { label: 'Churned', variant: 'outline' as const, className: 'bg-muted text-muted-foreground' },
+  trial: { label: 'Trial', variant: 'secondary' as const, className: 'bg-info/10 text-info border-info/20' },
 };
 
 const planConfig = {
   free: { label: 'Free', className: 'bg-muted text-muted-foreground' },
   basic: { label: 'Basic', className: 'bg-info/10 text-info border-info/20' },
   pro: { label: 'Pro', className: 'bg-primary/10 text-primary border-primary/20' },
+  enterprise: { label: 'Enterprise', className: 'bg-success/10 text-success border-success/20' },
 };
 
 export default function OrgDetailPage() {
@@ -204,7 +206,9 @@ export default function OrgDetailPage() {
   }
 
   const { organization: org, members, activities, billingEvents, integrations } = data;
-  const usagePercent = Math.round((org.monthlyUsage / org.monthlyLimit) * 100);
+  const usagePercent = org.monthlyLimit
+    ? Math.round(((org.monthlyUsage ?? 0) / org.monthlyLimit) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -311,8 +315,8 @@ export default function OrgDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold">{org.monthlyUsage.toLocaleString('pt-BR')}</span>
-                  <span className="text-muted-foreground mb-1">/ {org.monthlyLimit.toLocaleString('pt-BR')}</span>
+                  <span className="text-3xl font-bold">{(org.monthlyUsage ?? 0).toLocaleString('pt-BR')}</span>
+                  <span className="text-muted-foreground mb-1">/ {(org.monthlyLimit ?? 0).toLocaleString('pt-BR')}</span>
                 </div>
                 <Progress value={usagePercent} className={`mt-2 ${usagePercent > 80 ? '[&>div]:bg-warning' : ''}`} />
               </CardContent>
@@ -373,15 +377,15 @@ export default function OrgDetailPage() {
                     <div key={member.id} className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs">
-                          {member.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          {(member.fullName ?? member.name ?? '').split(' ').map(n => n[0]).join('').slice(0, 2)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{member.fullName}</p>
+                        <p className="text-sm font-medium truncate">{member.fullName ?? member.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {member.orgs.find(o => o.orgId === org.id)?.role}
+                        {member.orgs?.find(o => o.orgId === org.id)?.role}
                       </Badge>
                     </div>
                   ))}
@@ -415,18 +419,18 @@ export default function OrgDetailPage() {
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback className="text-xs">
-                              {member.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              {(member.fullName ?? member.name ?? '').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{member.fullName}</p>
+                            <p className="font-medium">{member.fullName ?? member.name}</p>
                             <p className="text-sm text-muted-foreground">{member.email}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {member.orgs.find(o => o.orgId === org.id)?.role}
+                          {member.orgs?.find(o => o.orgId === org.id)?.role}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">

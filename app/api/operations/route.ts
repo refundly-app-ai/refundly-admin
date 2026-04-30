@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export async function GET() {
   try {
-    const [webhooksResult, lifecycleResult, orgsResult] = await Promise.all([
+    const [webhooksResult, , orgsResult] = await Promise.all([
       supabaseAdmin
         .from('webhook_logs')
         .select('status, created_at')

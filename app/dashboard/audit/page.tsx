@@ -70,19 +70,20 @@ const actorTypeLabels: Record<string, string> = {
 export default function AuditPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: auditData, isLoading } = useSWR('/api/audit?type=tenant&limit=100', fetcher);
 
-  const rawLogs = (auditData?.data?.items ?? []).map((l: any) => ({
-    id: l.id,
+  const rawLogs = (auditData?.data?.items ?? []).map((l: Record<string, unknown>) => ({
+    id: l.id as string,
     action: l.action as string,
-    actorId: l.actor_id ?? '',
-    actorName: l.profiles?.full_name || l.profiles?.email || 'Desconhecido',
+    actorId: (l.actor_id as string) ?? '',
+    actorName: (l.profiles as { full_name?: string; email?: string } | null)?.full_name || (l.profiles as { email?: string } | null)?.email || 'Desconhecido',
     actorType: 'user',
-    targetName: l.organizations?.name,
-    metadata: l.metadata ?? {},
-    ipAddress: l.ip ?? l.ip_address,
-    timestamp: l.created_at,
+    targetName: (l.organizations as { name?: string } | null)?.name,
+    metadata: (l.metadata as Record<string, unknown>) ?? {},
+    ipAddress: (l.ip as string) ?? (l.ip_address as string),
+    timestamp: l.created_at as string,
   }));
 
   let filteredLogs = [...rawLogs];
@@ -92,7 +93,7 @@ export default function AuditPage() {
     filteredLogs = filteredLogs.filter(
       (log) =>
         log.actorName.toLowerCase().includes(q) ||
-        log.targetName?.toLowerCase().includes(q) ||
+        (log.targetName?.toLowerCase().includes(q) ?? false) ||
         log.action.toLowerCase().includes(q)
     );
   }
@@ -103,6 +104,29 @@ export default function AuditPage() {
 
   const total = auditData?.data?.pagination?.total ?? rawLogs.length;
 
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams({ type: 'tenant' });
+      if (actionFilter !== 'all') params.set('action', actionFilter);
+
+      const res = await fetch(`/api/audit/export?${params.toString()}`);
+      if (!res.ok) throw new Error('Falha ao exportar');
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently fail — user sees no download
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -112,8 +136,12 @@ export default function AuditPage() {
             Acompanhe todas as ações e alterações na plataforma
           </p>
         </div>
-        <Button variant="outline">
-          <Download className="mr-2 h-4 w-4" />
+        <Button variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
           Exportar Logs
         </Button>
       </div>

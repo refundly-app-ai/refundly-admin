@@ -1,7 +1,7 @@
 // Organization Types
 export type OrgStatus = 'active' | 'suspended' | 'blocked' | 'churned' | 'trial';
 export type OrganizationStatus = OrgStatus;
-export type Plan = 'free' | 'basic' | 'pro';
+export type Plan = 'free' | 'basic' | 'pro' | 'enterprise';
 export type OrganizationTier = Plan;
 
 export interface Organization {
@@ -27,6 +27,7 @@ export interface Organization {
   monthlyLimit?: number;
   firstActivityAt?: string | null;
   activeMembers30d?: number;
+  lastAdminLoginAt?: string | null;
 }
 
 // Member Types
@@ -50,6 +51,7 @@ export interface Member {
   mfaEnabled?: boolean;
   sessionsCount?: number;
   orgs?: Array<{ orgId: string; orgName: string; role: MemberRole }>;
+  verifiedChannel?: string | null;
 }
 
 // Platform Admin Types
@@ -166,6 +168,8 @@ export interface Integration {
   lastSyncAt?: string;
   lastSeenAt?: string;
   errorMessage?: string;
+  lastError?: string;
+  kind?: string;
   config?: Record<string, unknown>;
 }
 
@@ -195,6 +199,14 @@ export interface Invoice {
   dueDate: string;
   paidAt?: string;
   invoiceUrl?: string;
+}
+
+export interface BillingEvent {
+  id: string;
+  type: string;
+  amount?: number;
+  status: string;
+  createdAt: string;
 }
 
 // Operations Types

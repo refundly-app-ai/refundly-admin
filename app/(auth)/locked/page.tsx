@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,16 +19,27 @@ const unlockSchema = z.object({
 
 type UnlockFormData = z.infer<typeof unlockSchema>;
 
+interface AdminInfo {
+  fullName: string;
+  email: string;
+}
+
 export default function LockedPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [admin, setAdmin] = useState<AdminInfo | null>(null);
 
-  // Mock user data - in production, get from session
-  const user = {
-    fullName: 'Super Admin',
-    email: 'admin@example.com',
-  };
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) {
+          setAdmin({ fullName: result.data.fullName, email: result.data.email });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const form = useForm<UnlockFormData>({
     resolver: zodResolver(unlockSchema),
@@ -39,13 +50,23 @@ export default function LockedPage() {
     setIsLoading(true);
     setError(null);
 
-    // For now, simulate unlock - in production, verify password
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const res = await fetch('/api/auth/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: data.password }),
+      });
 
-    if (data.password === 'admin123') {
-      router.push('/dashboard');
-    } else {
-      setError('Senha incorreta');
+      const result = await res.json();
+
+      if (result.ok) {
+        router.push('/dashboard');
+      } else {
+        setError(result.error || 'Senha incorreta');
+      }
+    } catch {
+      setError('Erro ao verificar senha. Tente novamente.');
+    } finally {
       setIsLoading(false);
     }
   }
@@ -54,6 +75,10 @@ export default function LockedPage() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   }
+
+  const initials = admin
+    ? admin.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : '??';
 
   return (
     <Card className="border-border/50 shadow-2xl">
@@ -70,12 +95,12 @@ export default function LockedPage() {
         <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg mb-6">
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary/10 text-primary">
-              {user.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              {initials}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium text-sm">{user.fullName}</p>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
+            <p className="font-medium text-sm">{admin?.fullName ?? '—'}</p>
+            <p className="text-xs text-muted-foreground">{admin?.email ?? '—'}</p>
           </div>
         </div>
 
