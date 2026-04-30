@@ -6,8 +6,8 @@ import { QueryProvider } from '@/components/providers/query-provider'
 import './globals.css'
 
 // Font variables kept for future theme wiring
-Geist({ subsets: ['latin'] })
-Geist_Mono({ subsets: ['latin'] })
+const _geist = Geist({ subsets: ['latin'] })
+const _geistMono = Geist_Mono({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Super Admin Dashboard',
