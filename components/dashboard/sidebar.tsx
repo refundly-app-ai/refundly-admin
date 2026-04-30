@@ -37,21 +37,21 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { title: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { title: 'Organizations', href: '/dashboard/organizations', icon: Building2 },
-  { title: 'Members', href: '/dashboard/members', icon: Users },
-  { title: 'Compliance', href: '/dashboard/compliance', icon: Shield, badge: '3' },
-  { title: 'Integrations', href: '/dashboard/integrations', icon: Plug },
-  { title: 'Billing', href: '/dashboard/billing', icon: CreditCard },
-  { title: 'Operations', href: '/dashboard/operations', icon: Activity },
-  { title: 'Audit Logs', href: '/dashboard/audit', icon: FileText },
-  { 
-    title: 'Settings', 
-    href: '/dashboard/settings', 
+  { title: 'Visão Geral', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Organizações', href: '/dashboard/organizations', icon: Building2 },
+  { title: 'Membros', href: '/dashboard/members', icon: Users },
+  { title: 'Conformidade', href: '/dashboard/compliance', icon: Shield, badge: '3' },
+  { title: 'Integrações', href: '/dashboard/integrations', icon: Plug },
+  { title: 'Faturamento', href: '/dashboard/billing', icon: CreditCard },
+  { title: 'Operações', href: '/dashboard/operations', icon: Activity },
+  { title: 'Logs de Auditoria', href: '/dashboard/audit', icon: FileText },
+  {
+    title: 'Configurações',
+    href: '/dashboard/settings',
     icon: Settings,
     children: [
       { title: 'Admins', href: '/dashboard/settings/admins', icon: UserCog },
-      { title: 'Profile', href: '/dashboard/settings/profile', icon: User },
+      { title: 'Perfil', href: '/dashboard/settings/profile', icon: User },
     ]
   },
 ];

@@ -22,9 +22,9 @@ interface TopbarProps {
 
 export function Topbar({ onOpenCommandPalette }: TopbarProps) {
   const [notifications] = useState([
-    { id: 1, title: 'New organization signup', time: '2 min ago' },
-    { id: 2, title: 'Compliance alert: HealthCare Plus', time: '15 min ago' },
-    { id: 3, title: 'Payment failed: RetailMax', time: '1 hour ago' },
+    { id: 1, title: 'Nova organização cadastrada', time: 'há 2 min' },
+    { id: 2, title: 'Alerta de conformidade: HealthCare Plus', time: 'há 15 min' },
+    { id: 3, title: 'Pagamento falhou: RetailMax', time: 'há 1 hora' },
   ]);
 
   return (
@@ -36,7 +36,7 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
         onClick={onOpenCommandPalette}
       >
         <Search className="h-4 w-4" />
-        <span className="flex-1 text-left">Search...</span>
+        <span className="flex-1 text-left">Buscar...</span>
         <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground sm:flex">
           <span className="text-xs">⌘</span>K
         </kbd>
@@ -60,7 +60,7 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            <DropdownMenuLabel>Notificações</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifications.map((notification) => (
               <DropdownMenuItem key={notification.id} className="flex flex-col items-start gap-1 py-3">
@@ -70,7 +70,7 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="justify-center text-sm font-medium">
-              View all notifications
+              Ver todas as notificações
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -98,21 +98,21 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <User className="mr-2 h-4 w-4" />
-              Profile
+              Perfil
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              Configurações
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Shield className="mr-2 h-4 w-4" />
-              Security
-              <Badge variant="secondary" className="ml-auto text-xs">MFA On</Badge>
+              Segurança
+              <Badge variant="secondary" className="ml-auto text-xs">2FA Ativo</Badge>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

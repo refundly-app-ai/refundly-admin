@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +32,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DataTable } from '@/components/dashboard/data-table';
-import { members, organizations } from '@/lib/mock-data';
 import type { Member, MemberRole, MemberStatus } from '@/lib/types';
 import {
   MoreHorizontal,
@@ -45,14 +45,23 @@ import {
   Shield,
   Key,
   UserCog,
+  Loader2,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const statusColors: Record<MemberStatus, string> = {
   active: 'bg-success/20 text-success border-success/30',
   invited: 'bg-info/20 text-info border-info/30',
   suspended: 'bg-warning/20 text-warning border-warning/30',
   deactivated: 'bg-muted text-muted-foreground',
+};
+
+const statusLabels: Record<MemberStatus, string> = {
+  active: 'Ativo',
+  invited: 'Convidado',
+  suspended: 'Suspenso',
+  deactivated: 'Desativado',
 };
 
 const roleColors: Record<MemberRole, string> = {
@@ -62,25 +71,61 @@ const roleColors: Record<MemberRole, string> = {
   viewer: 'bg-muted text-muted-foreground',
 };
 
+const roleLabels: Record<MemberRole, string> = {
+  owner: 'Proprietário',
+  admin: 'Admin',
+  member: 'Membro',
+  viewer: 'Visualizador',
+};
+
 export default function MembersPage() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
 
+  const { data: membersData, isLoading: membersLoading } = useSWR('/api/members?limit=100', fetcher);
+  const { data: orgsData } = useSWR('/api/organizations?limit=100', fetcher);
+
+  const members: Member[] = (membersData?.data?.items ?? []).map((m: any) => ({
+    id: m.id,
+    email: m.email,
+    name: m.fullName || m.email,
+    fullName: m.fullName,
+    organizationId: m.orgId,
+    organizationName: m.orgName,
+    role: m.role as MemberRole,
+    status: (m.banned ? 'suspended' : 'active') as MemberStatus,
+    banned: m.banned ?? false,
+    mfaEnabled: m.whatsappVerified ?? false,
+    createdAt: new Date().toISOString(),
+  }));
+
+  const orgList: Array<{ id: string; name: string }> = (orgsData?.data?.items ?? []).map((o: any) => ({
+    id: o.id,
+    name: o.name,
+  }));
+
+  const stats = {
+    total: membersData?.data?.pagination?.total ?? members.length,
+    active: members.filter((m) => !m.banned).length,
+    mfaEnabled: members.filter((m) => m.mfaEnabled).length,
+    admins: members.filter((m) => m.role === 'admin' || m.role === 'owner').length,
+  };
+
   const columns = [
     {
       key: 'name',
-      header: 'Member',
+      header: 'Membro',
       cell: (member: Member) => (
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-              {member.name.split(' ').map((n) => n[0]).join('')}
+              {(member.name || member.email).split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium text-foreground">{member.name}</p>
+            <p className="font-medium text-foreground">{member.name ?? member.email}</p>
             <p className="text-xs text-muted-foreground">{member.email}</p>
           </div>
         </div>
@@ -88,57 +133,43 @@ export default function MembersPage() {
     },
     {
       key: 'organization',
-      header: 'Organization',
+      header: 'Organização',
       cell: (member: Member) => (
-        <span className="text-muted-foreground">{member.organizationName}</span>
+        <span className="text-muted-foreground">{member.organizationName ?? '—'}</span>
       ),
     },
     {
       key: 'role',
-      header: 'Role',
-      cell: (member: Member) => (
-        <Badge className={roleColors[member.role]}>{member.role}</Badge>
-      ),
+      header: 'Papel',
+      cell: (member: Member) =>
+        member.role ? (
+          <Badge className={roleColors[member.role as MemberRole]}>{roleLabels[member.role as MemberRole]}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'status',
       header: 'Status',
-      cell: (member: Member) => (
-        <Badge className={statusColors[member.status]}>{member.status}</Badge>
-      ),
+      cell: (member: Member) =>
+        member.status ? (
+          <Badge className={statusColors[member.status as MemberStatus]}>{statusLabels[member.status as MemberStatus]}</Badge>
+        ) : null,
     },
     {
       key: 'mfa',
-      header: 'MFA',
+      header: 'WhatsApp',
       cell: (member: Member) =>
         member.mfaEnabled ? (
           <Badge className="bg-success/20 text-success border-success/30">
             <Shield className="mr-1 h-3 w-3" />
-            Enabled
+            Verificado
           </Badge>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
-            Disabled
+            Não verificado
           </Badge>
         ),
-    },
-    {
-      key: 'sessions',
-      header: 'Sessions',
-      cell: (member: Member) => (
-        <span className="text-muted-foreground">{member.sessionsCount}</span>
-      ),
-    },
-    {
-      key: 'lastLogin',
-      header: 'Last Login',
-      cell: (member: Member) => (
-        <span className="text-muted-foreground text-sm">
-          {member.lastLoginAt
-            ? formatDistanceToNow(new Date(member.lastLoginAt), { addSuffix: true })
-            : 'Never'}
-        </span>
-      ),
     },
     {
       key: 'actions',
@@ -151,7 +182,7 @@ export default function MembersPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuLabel>Ações</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
@@ -160,11 +191,11 @@ export default function MembersPage() {
               }}
             >
               <Eye className="mr-2 h-4 w-4" />
-              View Details
+              Ver Detalhes
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Edit className="mr-2 h-4 w-4" />
-              Edit
+              Editar
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -173,27 +204,27 @@ export default function MembersPage() {
               }}
             >
               <UserCog className="mr-2 h-4 w-4" />
-              Impersonate
+              Personificar
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Key className="mr-2 h-4 w-4" />
-              Reset Password
+              Resetar Senha
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {member.status === 'active' ? (
               <DropdownMenuItem className="text-warning">
                 <Ban className="mr-2 h-4 w-4" />
-                Suspend
+                Suspender
               </DropdownMenuItem>
             ) : member.status === 'suspended' ? (
               <DropdownMenuItem className="text-success">
                 <CheckCircle className="mr-2 h-4 w-4" />
-                Reactivate
+                Reativar
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem className="text-destructive">
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              Excluir
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -206,134 +237,133 @@ export default function MembersPage() {
       key: 'status',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Active' },
-        { value: 'invited', label: 'Invited' },
-        { value: 'suspended', label: 'Suspended' },
-        { value: 'deactivated', label: 'Deactivated' },
+        { value: 'active', label: 'Ativo' },
+        { value: 'invited', label: 'Convidado' },
+        { value: 'suspended', label: 'Suspenso' },
+        { value: 'deactivated', label: 'Desativado' },
       ],
     },
     {
       key: 'role',
-      label: 'Role',
+      label: 'Papel',
       options: [
-        { value: 'owner', label: 'Owner' },
+        { value: 'owner', label: 'Proprietário' },
         { value: 'admin', label: 'Admin' },
-        { value: 'member', label: 'Member' },
-        { value: 'viewer', label: 'Viewer' },
+        { value: 'member', label: 'Membro' },
+        { value: 'viewer', label: 'Visualizador' },
       ],
     },
   ];
 
-  // Stats
-  const stats = {
-    total: members.length,
-    active: members.filter((m) => m.status === 'active').length,
-    mfaEnabled: members.filter((m) => m.mfaEnabled).length,
-    admins: members.filter((m) => m.role === 'admin' || m.role === 'owner').length,
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Members</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Membros</h1>
           <p className="text-sm text-muted-foreground">
-            Manage all platform members across organizations
+            Gerencie todos os membros da plataforma
           </p>
         </div>
         <Button onClick={() => setInviteDialogOpen(true)}>
           <UserPlus className="mr-2 h-4 w-4" />
-          Invite Member
+          Convidar Membro
         </Button>
       </div>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Members
+              Total de Membros
             </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-2xl font-bold">
+              {membersLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.total}
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active
+              Ativos
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.active}</div>
+            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.active}</div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              MFA Enabled
+              WhatsApp Verificado
             </CardTitle>
             <Shield className="h-4 w-4 text-chart-1" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.mfaEnabled}</div>
-            <p className="text-xs text-muted-foreground">
-              {Math.round((stats.mfaEnabled / stats.total) * 100)}% adoption
-            </p>
+            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.mfaEnabled}</div>
+            {!membersLoading && stats.total > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {Math.round((stats.mfaEnabled / stats.total) * 100)}% do total
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Admins & Owners
+              Admins e Proprietários
             </CardTitle>
             <UserCog className="h-4 w-4 text-chart-3" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.admins}</div>
+            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.admins}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Data Table */}
       <Card className="bg-card border-border">
         <CardContent className="pt-6">
-          <DataTable
-            data={members}
-            columns={columns}
-            searchPlaceholder="Search members..."
-            searchKey="name"
-            filters={filters}
-          />
+          {membersLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <DataTable
+              data={members}
+              columns={columns}
+              searchPlaceholder="Buscar membros..."
+              searchKey="name"
+              filters={filters}
+            />
+          )}
         </CardContent>
       </Card>
 
-      {/* Invite Member Dialog */}
+      {/* Dialog: Convidar Membro */}
       <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite Member</DialogTitle>
+            <DialogTitle>Convidar Membro</DialogTitle>
             <DialogDescription>
-              Send an invitation to a new member.
+              Envie um convite para um novo membro.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="email@example.com" />
+              <Label htmlFor="email">E-mail</Label>
+              <Input id="email" type="email" placeholder="email@exemplo.com" />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="organization">Organization</Label>
+              <Label htmlFor="organization">Organização</Label>
               <Select>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select organization" />
+                  <SelectValue placeholder="Selecione uma organização" />
                 </SelectTrigger>
                 <SelectContent>
-                  {organizations.map((org) => (
+                  {orgList.map((org) => (
                     <SelectItem key={org.id} value={org.id}>
                       {org.name}
                     </SelectItem>
@@ -342,29 +372,29 @@ export default function MembersPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">Papel</Label>
               <Select>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder="Selecione um papel" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="member">Membro</SelectItem>
+                  <SelectItem value="viewer">Visualizador</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
-              Cancel
+              Cancelar
             </Button>
-            <Button onClick={() => setInviteDialogOpen(false)}>Send Invite</Button>
+            <Button onClick={() => setInviteDialogOpen(false)}>Enviar Convite</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Member Details Dialog */}
+      {/* Dialog: Detalhes do Membro */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -376,38 +406,28 @@ export default function MembersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge className={statusColors[selectedMember.status]}>
-                    {selectedMember.status}
-                  </Badge>
+                  {selectedMember.status && (
+                    <Badge className={statusColors[selectedMember.status as MemberStatus]}>
+                      {statusLabels[selectedMember.status as MemberStatus]}
+                    </Badge>
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Role</p>
-                  <Badge className={roleColors[selectedMember.role]}>
-                    {selectedMember.role}
-                  </Badge>
+                  <p className="text-sm text-muted-foreground">Papel</p>
+                  {selectedMember.role && (
+                    <Badge className={roleColors[selectedMember.role as MemberRole]}>
+                      {roleLabels[selectedMember.role as MemberRole]}
+                    </Badge>
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Organization</p>
-                  <p className="font-medium">{selectedMember.organizationName}</p>
+                  <p className="text-sm text-muted-foreground">Organização</p>
+                  <p className="font-medium">{selectedMember.organizationName ?? '—'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">MFA</p>
+                  <p className="text-sm text-muted-foreground">WhatsApp</p>
                   <p className="font-medium">
-                    {selectedMember.mfaEnabled ? 'Enabled' : 'Disabled'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Active Sessions</p>
-                  <p className="font-medium">{selectedMember.sessionsCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Last Login</p>
-                  <p className="font-medium">
-                    {selectedMember.lastLoginAt
-                      ? formatDistanceToNow(new Date(selectedMember.lastLoginAt), {
-                          addSuffix: true,
-                        })
-                      : 'Never'}
+                    {selectedMember.mfaEnabled ? 'Verificado' : 'Não verificado'}
                   </p>
                 </div>
               </div>
@@ -415,42 +435,42 @@ export default function MembersPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Close
+              Fechar
             </Button>
-            <Button>Edit Member</Button>
+            <Button>Editar Membro</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Impersonation Dialog */}
+      {/* Dialog: Personificar */}
       <Dialog open={impersonateDialogOpen} onOpenChange={setImpersonateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Impersonate User</DialogTitle>
+            <DialogTitle>Personificar Usuário</DialogTitle>
             <DialogDescription>
-              You are about to impersonate {selectedMember?.name}. This action will be logged.
+              Você está prestes a personificar {selectedMember?.name}. Esta ação será registrada.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="reason">Reason for impersonation</Label>
-              <Input id="reason" placeholder="Support ticket #1234" />
+              <Label htmlFor="reason">Motivo da personificação</Label>
+              <Input id="reason" placeholder="Ticket de suporte #1234" />
             </div>
             <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
               <p className="text-sm text-warning">
-                Impersonation sessions are logged and audited. Only use this feature for legitimate support purposes.
+                Sessões de personificação são registradas e auditadas. Use este recurso apenas para fins legítimos de suporte.
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setImpersonateDialogOpen(false)}>
-              Cancel
+              Cancelar
             </Button>
             <Button
               className="bg-warning text-warning-foreground hover:bg-warning/90"
               onClick={() => setImpersonateDialogOpen(false)}
             >
-              Start Impersonation
+              Iniciar Personificação
             </Button>
           </DialogFooter>
         </DialogContent>

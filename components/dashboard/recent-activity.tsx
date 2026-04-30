@@ -16,39 +16,44 @@ import {
 import type { AuditLog, AuditAction } from '@/lib/types';
 
 const actionConfig: Record<AuditAction, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
-  'user.login': { icon: LogIn, color: 'text-chart-1', label: 'User Login' },
-  'user.logout': { icon: LogIn, color: 'text-muted-foreground', label: 'User Logout' },
-  'user.created': { icon: UserPlus, color: 'text-success', label: 'User Created' },
-  'user.updated': { icon: Settings, color: 'text-chart-1', label: 'User Updated' },
-  'user.deleted': { icon: UserX, color: 'text-destructive', label: 'User Deleted' },
-  'user.suspended': { icon: UserX, color: 'text-warning', label: 'User Suspended' },
-  'org.created': { icon: Building2, color: 'text-success', label: 'Org Created' },
-  'org.updated': { icon: Building2, color: 'text-chart-1', label: 'Org Updated' },
-  'org.deleted': { icon: Building2, color: 'text-destructive', label: 'Org Deleted' },
-  'org.suspended': { icon: Building2, color: 'text-warning', label: 'Org Suspended' },
-  'billing.subscription_created': { icon: CreditCard, color: 'text-success', label: 'Subscription Created' },
-  'billing.subscription_updated': { icon: CreditCard, color: 'text-chart-1', label: 'Subscription Updated' },
-  'billing.invoice_paid': { icon: CreditCard, color: 'text-success', label: 'Invoice Paid' },
-  'settings.updated': { icon: Settings, color: 'text-chart-1', label: 'Settings Updated' },
-  'feature_flag.toggled': { icon: Flag, color: 'text-chart-4', label: 'Feature Flag Toggled' },
-  'impersonation.started': { icon: Shield, color: 'text-warning', label: 'Impersonation Started' },
-  'impersonation.ended': { icon: Shield, color: 'text-muted-foreground', label: 'Impersonation Ended' },
+  'user.login': { icon: LogIn, color: 'text-chart-1', label: 'Login do usuário' },
+  'user.logout': { icon: LogIn, color: 'text-muted-foreground', label: 'Logout do usuário' },
+  'user.created': { icon: UserPlus, color: 'text-success', label: 'Usuário criado' },
+  'user.updated': { icon: Settings, color: 'text-chart-1', label: 'Usuário atualizado' },
+  'user.deleted': { icon: UserX, color: 'text-destructive', label: 'Usuário excluído' },
+  'user.suspended': { icon: UserX, color: 'text-warning', label: 'Usuário suspenso' },
+  'org.created': { icon: Building2, color: 'text-success', label: 'Organização criada' },
+  'org.updated': { icon: Building2, color: 'text-chart-1', label: 'Organização atualizada' },
+  'org.deleted': { icon: Building2, color: 'text-destructive', label: 'Organização excluída' },
+  'org.suspended': { icon: Building2, color: 'text-warning', label: 'Organização suspensa' },
+  'billing.subscription_created': { icon: CreditCard, color: 'text-success', label: 'Assinatura criada' },
+  'billing.subscription_updated': { icon: CreditCard, color: 'text-chart-1', label: 'Assinatura atualizada' },
+  'billing.invoice_paid': { icon: CreditCard, color: 'text-success', label: 'Fatura paga' },
+  'settings.updated': { icon: Settings, color: 'text-chart-1', label: 'Configurações atualizadas' },
+  'feature_flag.toggled': { icon: Flag, color: 'text-chart-4', label: 'Feature flag alterada' },
+  'impersonation.started': { icon: Shield, color: 'text-warning', label: 'Personificação iniciada' },
+  'impersonation.ended': { icon: Shield, color: 'text-muted-foreground', label: 'Personificação encerrada' },
 };
 
 interface RecentActivityProps {
   logs: AuditLog[];
 }
 
+const fallbackConfig = { icon: Settings, color: 'text-muted-foreground', label: '' };
+
 export function RecentActivity({ logs }: RecentActivityProps) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
+        <CardTitle className="text-base font-medium">Atividade Recente</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {logs.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma atividade recente.</p>
+          )}
           {logs.map((log) => {
-            const config = actionConfig[log.action];
+            const config = (actionConfig as Record<string, typeof fallbackConfig>)[log.action] ?? { ...fallbackConfig, label: log.action };
             const Icon = config.icon;
 
             return (

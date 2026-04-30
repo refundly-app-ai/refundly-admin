@@ -136,12 +136,12 @@ export function DataTable<T extends { id: string }>({
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X className="mr-1 h-4 w-4" />
-            Clear filters
+            Limpar filtros
           </Button>
         )}
 
         <div className="ml-auto text-sm text-muted-foreground">
-          {filteredData.length} results
+          {filteredData.length} resultado{filteredData.length !== 1 ? 's' : ''}
         </div>
       </div>
 
@@ -161,7 +161,7 @@ export function DataTable<T extends { id: string }>({
             {paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  No results found.
+                  Nenhum resultado encontrado.
                 </TableCell>
               </TableRow>
             ) : (
@@ -181,8 +181,8 @@ export function DataTable<T extends { id: string }>({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(startIndex + pageSize, filteredData.length)} of{' '}
-            {filteredData.length} entries
+            Mostrando {startIndex + 1} a {Math.min(startIndex + pageSize, filteredData.length)} de{' '}
+            {filteredData.length} registros
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -194,7 +194,7 @@ export function DataTable<T extends { id: string }>({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
+              Página {currentPage} de {totalPages}
             </span>
             <Button
               variant="outline"

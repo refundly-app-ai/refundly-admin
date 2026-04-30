@@ -24,18 +24,18 @@ export function SystemHealthCard({ services }: SystemHealthCardProps) {
   const getStatusBadge = (status: SystemHealth['status']) => {
     switch (status) {
       case 'healthy':
-        return <Badge className="bg-success/20 text-success border-success/30">Healthy</Badge>;
+        return <Badge className="bg-success/20 text-success border-success/30">Saudável</Badge>;
       case 'degraded':
-        return <Badge className="bg-warning/20 text-warning border-warning/30">Degraded</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-warning/30">Degradado</Badge>;
       case 'down':
-        return <Badge variant="destructive">Down</Badge>;
+        return <Badge variant="destructive">Fora</Badge>;
     }
   };
 
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-base font-medium">System Health</CardTitle>
+        <CardTitle className="text-base font-medium">Status dos Serviços</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -49,7 +49,7 @@ export function SystemHealthCard({ services }: SystemHealthCardProps) {
                 <div>
                   <p className="text-sm font-medium text-foreground">{service.service}</p>
                   <p className="text-xs text-muted-foreground">
-                    {service.latency}ms latency | {service.uptime}% uptime
+                    {service.latency}ms latência | {service.uptime}% uptime
                   </p>
                 </div>
               </div>
