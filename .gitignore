@@ -7,7 +7,7 @@ __v0_jsx-dev-runtime.ts
 .vercel/
 next.user-config.*
 
-# Environment variables
+# Environment variables files
 .env
 .env.example
 
