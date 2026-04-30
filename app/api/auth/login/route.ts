@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { loginRateLimiter } from '@/lib/auth/rate-limit';
-import { findAdminByEmail, verifyAdminPassword } from '@/lib/mocks/admins';
+import { findAdminByEmail, verifyAdminPassword, isAccountLocked, incrementFailedAttempts } from '@/lib/db/admins';
 import { logActivity } from '@/lib/audit';
-import { createTempSession, generateToken } from '@/lib/auth/temp-store';
+import { createSession } from '@/lib/auth/session';
 
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
     const ua = request.headers.get('user-agent') || 'unknown';
 
-    // Rate limiting
     const { success } = await loginRateLimiter.limit(ip);
     if (!success) {
       return NextResponse.json(
@@ -35,82 +34,53 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = validation.data;
-    const admin = findAdminByEmail(email);
+    const admin = await findAdminByEmail(email);
 
-    if (!admin || !admin.isActive) {
-      await logActivity({
-        adminId: null,
-        action: 'login_failed',
-        entity: 'auth',
-        entityId: null,
-        metadata: { email, reason: 'user_not_found' },
-        ip,
-        ua,
-      });
+    if (!admin || !admin.is_active) {
+      await logActivity({ adminId: null, action: 'login_failed', entity: 'auth', entityId: null, metadata: { email, reason: 'user_not_found' }, ip, ua });
+      return NextResponse.json({ ok: false, error: 'Credenciais inválidas' }, { status: 401 });
+    }
+
+    if (isAccountLocked(admin)) {
       return NextResponse.json(
-        { ok: false, error: 'Credenciais inválidas' },
-        { status: 401 }
+        { ok: false, error: 'Conta bloqueada por excesso de tentativas. Tente novamente em 15 minutos.' },
+        { status: 423 }
       );
     }
 
     const isValidPassword = await verifyAdminPassword(admin, password);
     if (!isValidPassword) {
-      await logActivity({
-        adminId: admin.id,
-        action: 'login_failed',
-        entity: 'auth',
-        entityId: admin.id,
-        metadata: { reason: 'invalid_password' },
-        ip,
-        ua,
-      });
-      return NextResponse.json(
-        { ok: false, error: 'Credenciais inválidas' },
-        { status: 401 }
-      );
+      await incrementFailedAttempts(admin.id);
+      await logActivity({ adminId: admin.id, action: 'login_failed', entity: 'auth', entityId: admin.id, metadata: { reason: 'invalid_password' }, ip, ua });
+      return NextResponse.json({ ok: false, error: 'Credenciais inválidas' }, { status: 401 });
     }
 
-    // Generate session token
-    const token = generateToken();
-
-    // Check if TOTP is enabled
-    if (admin.totpEnabled && admin.totpSecret) {
-      createTempSession(token, {
+    if (admin.totp_enabled && admin.totp_secret) {
+      await createSession({
         adminId: admin.id,
         email: admin.email,
-        fullName: admin.fullName,
+        fullName: admin.full_name,
         totpPending: true,
         totpVerified: false,
         enrollmentPending: false,
+        isLoggedIn: false,
       });
-
-      const response = NextResponse.json({
-        ok: true,
-        data: { requiresTotp: true, token },
-      });
-      
-      return response;
+      return NextResponse.json({ ok: true, data: { requiresTotp: true } });
     }
 
-    // TOTP not enabled - redirect to setup
-    createTempSession(token, {
+    await createSession({
       adminId: admin.id,
       email: admin.email,
-      fullName: admin.fullName,
+      fullName: admin.full_name,
       totpPending: false,
       totpVerified: false,
       enrollmentPending: true,
+      isLoggedIn: false,
     });
+    return NextResponse.json({ ok: true, data: { requiresSetup: true } });
 
-    return NextResponse.json({
-      ok: true,
-      data: { requiresSetup: true, token },
-    });
   } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor' },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

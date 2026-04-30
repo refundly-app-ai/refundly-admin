@@ -1,24 +1,32 @@
 // Organization Types
-export type OrganizationStatus = 'active' | 'suspended' | 'churned' | 'trial';
-export type OrganizationTier = 'free' | 'pro' | 'enterprise';
+export type OrgStatus = 'active' | 'suspended' | 'blocked' | 'churned' | 'trial';
+export type OrganizationStatus = OrgStatus;
+export type Plan = 'free' | 'basic' | 'pro';
+export type OrganizationTier = Plan;
 
 export interface Organization {
   id: string;
   name: string;
   slug: string;
   logo?: string;
-  status: OrganizationStatus;
-  tier: OrganizationTier;
-  memberCount: number;
+  status: OrgStatus;
+  plan: Plan;
+  tier?: Plan;
+  memberCount?: number;
+  membersCount?: number;
   mrr: number;
   createdAt: string;
-  lastActiveAt: string;
+  lastActiveAt?: string;
   domain?: string;
   industry?: string;
   country?: string;
-  healthScore: number;
-  complianceScore: number;
-  featureFlags: string[];
+  healthScore?: number;
+  complianceScore?: number;
+  featureFlags?: string[];
+  monthlyUsage?: number;
+  monthlyLimit?: number;
+  firstActivityAt?: string | null;
+  activeMembers30d?: number;
 }
 
 // Member Types
@@ -28,16 +36,43 @@ export type MemberStatus = 'active' | 'invited' | 'suspended' | 'deactivated';
 export interface Member {
   id: string;
   email: string;
-  name: string;
+  name?: string;
+  fullName?: string;
   avatar?: string;
-  organizationId: string;
-  organizationName: string;
-  role: MemberRole;
-  status: MemberStatus;
+  organizationId?: string;
+  organizationName?: string;
+  role?: MemberRole;
+  status?: MemberStatus;
+  banned?: boolean;
   lastLoginAt?: string;
+  lastSignInAt?: string;
   createdAt: string;
-  mfaEnabled: boolean;
-  sessionsCount: number;
+  mfaEnabled?: boolean;
+  sessionsCount?: number;
+  orgs?: Array<{ orgId: string; orgName: string; role: MemberRole }>;
+}
+
+// Platform Admin Types
+export interface PlatformAdmin {
+  id: string;
+  email: string;
+  fullName: string;
+  totpEnabled: boolean;
+  lastLoginAt: string | null;
+  isActive: boolean;
+}
+
+// Activity / Audit Log Types
+export interface Activity {
+  id: string;
+  orgId: string | null;
+  actorId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  ip: string | null;
+  createdAt: string;
 }
 
 // Admin User Types
@@ -55,10 +90,10 @@ export interface AdminUser {
 }
 
 // Audit Log Types
-export type AuditAction = 
-  | 'user.login' 
-  | 'user.logout' 
-  | 'user.created' 
+export type AuditAction =
+  | 'user.login'
+  | 'user.logout'
+  | 'user.created'
   | 'user.updated'
   | 'user.deleted'
   | 'user.suspended'
@@ -116,18 +151,20 @@ export interface DataRetentionPolicy {
 }
 
 // Integration Types
-export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'syncing';
+export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'syncing' | 'degraded';
 
 export interface Integration {
   id: string;
-  name: string;
-  provider: string;
-  icon: string;
+  name?: string;
+  provider?: string;
+  icon?: string;
   status: IntegrationStatus;
-  organizationId: string;
-  organizationName: string;
-  connectedAt: string;
+  orgId?: string;
+  organizationId?: string;
+  organizationName?: string;
+  connectedAt?: string;
   lastSyncAt?: string;
+  lastSeenAt?: string;
   errorMessage?: string;
   config?: Record<string, unknown>;
 }
@@ -191,7 +228,7 @@ export interface FeatureFlag {
   enabled: boolean;
   rolloutPercentage: number;
   targetOrganizations?: string[];
-  targetTiers?: OrganizationTier[];
+  targetTiers?: Plan[];
   createdAt: string;
   updatedAt: string;
 }

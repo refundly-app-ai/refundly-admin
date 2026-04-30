@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSession, updateSession } from '@/lib/auth/session';
 import { verifyTOTP } from '@/lib/auth/totp';
-import { findAdminById, updateAdminTOTP, updateAdminLastLogin } from '@/lib/mocks/admins';
+import { encryptSecret } from '@/lib/auth/crypto';
+import { findAdminById, updateAdminTOTP, updateAdminLastLogin } from '@/lib/db/admins';
 import { logActivity } from '@/lib/audit';
 
 const confirmSchema = z.object({
@@ -18,70 +19,37 @@ export async function POST(request: NextRequest) {
     const session = await getSession();
 
     if (!session.adminId || !session.enrollmentPending) {
-      return NextResponse.json(
-        { ok: false, error: 'Sessão inválida', status: 401 },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: 'Sessão inválida' }, { status: 401 });
     }
 
     const body = await request.json();
     const validation = confirmSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        { ok: false, error: validation.error.errors[0].message, status: 400 },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: validation.error.errors[0].message }, { status: 400 });
     }
 
     const { secret, code, recoveryCodes } = validation.data;
-    const admin = findAdminById(session.adminId);
+    const admin = await findAdminById(session.adminId);
 
     if (!admin) {
-      return NextResponse.json(
-        { ok: false, error: 'Admin não encontrado', status: 404 },
-        { status: 404 }
-      );
+      return NextResponse.json({ ok: false, error: 'Admin não encontrado' }, { status: 404 });
     }
 
-    // Verify the TOTP code
     const isValid = verifyTOTP(secret, code);
     if (!isValid) {
-      return NextResponse.json(
-        { ok: false, error: 'Código inválido. Verifique seu aplicativo autenticador.', status: 400 },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Código inválido. Verifique seu aplicativo autenticador.' }, { status: 400 });
     }
 
-    // Save TOTP configuration
-    updateAdminTOTP(admin.id, secret, recoveryCodes);
-    updateAdminLastLogin(admin.id);
+    const encryptedSecret = await encryptSecret(secret);
+    await updateAdminTOTP(admin.id, encryptedSecret, recoveryCodes);
+    await updateAdminLastLogin(admin.id);
+    await updateSession({ totpVerified: true, enrollmentPending: false, isLoggedIn: true, expiresAt: Date.now() + 8 * 60 * 60 * 1000 });
+    await logActivity({ adminId: admin.id, action: '2fa_enabled', entity: 'admin', entityId: admin.id, metadata: { method: 'totp' }, ip, ua });
 
-    // Update session to fully authenticated
-    await updateSession({
-      totpVerified: true,
-      enrollmentPending: false,
-    });
-
-    await logActivity({
-      adminId: admin.id,
-      action: '2fa_enabled',
-      entity: 'admin',
-      entityId: admin.id,
-      metadata: { method: 'totp' },
-      ip,
-      ua,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      data: { enabled: true },
-    });
+    return NextResponse.json({ ok: true, data: { enabled: true } });
   } catch (error) {
     console.error('Confirm 2FA error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

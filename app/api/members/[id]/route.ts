@@ -1,58 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockMembers, mockActivities } from '@/lib/mock-data';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// TODO: replace with real data source
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const member = mockMembers.find(m => m.id === id);
 
-    if (!member) {
-      return NextResponse.json(
-        { ok: false, error: 'Membro não encontrado', status: 404 },
-        { status: 404 }
-      );
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (profileError || !profile) {
+      return NextResponse.json({ ok: false, error: 'Membro não encontrado' }, { status: 404 });
     }
 
-    // Get member activities across all orgs
-    const activities = mockActivities.filter(a => a.actorId === id);
+    const { data: orgs } = await supabaseAdmin
+      .from('user_org_roles')
+      .select('role, org_id, organizations(name, slug)')
+      .eq('user_id', id);
 
-    // Mock sessions
-    const sessions = [
-      {
-        id: 'sess_1',
-        device: 'Chrome on macOS',
-        ip: '192.168.1.1',
-        location: 'São Paulo, BR',
-        lastActive: new Date().toISOString(),
-        current: true,
-      },
-      {
-        id: 'sess_2',
-        device: 'Safari on iOS',
-        ip: '192.168.1.2',
-        location: 'São Paulo, BR',
-        lastActive: new Date(Date.now() - 3600000).toISOString(),
-        current: false,
-      },
-    ];
+    const { data: activities } = await supabaseAdmin
+      .from('audit_logs')
+      .select('*')
+      .eq('actor_id', id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
 
     return NextResponse.json({
       ok: true,
       data: {
-        member,
-        activities: activities.slice(0, 100),
-        sessions,
+        member: {
+          id,
+          email: authUser?.user?.email ?? profile.email,
+          fullName: profile.full_name,
+          banned: profile.banned ?? false,
+          whatsappVerified: profile.whatsapp_verified ?? false,
+          createdAt: authUser?.user?.created_at ?? profile.created_at,
+          lastSignInAt: authUser?.user?.last_sign_in_at ?? null,
+          orgs: (orgs ?? []).map((o: any) => ({
+            orgId: o.org_id,
+            orgName: o.organizations?.name,
+            orgSlug: o.organizations?.slug,
+            role: o.role,
+          })),
+        },
+        activities: activities ?? [],
+        sessions: [],
       },
     });
   } catch (error) {
     console.error('Get member error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

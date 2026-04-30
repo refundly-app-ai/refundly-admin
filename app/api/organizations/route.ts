@@ -1,67 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockOrganizations } from '@/lib/mock-data';
-import { Organization, OrgStatus, Plan } from '@/lib/types';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// TODO: replace with real data source
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') as OrgStatus | null;
-    const plan = searchParams.get('plan') as Plan | null;
-    const healthBucket = searchParams.get('healthBucket');
+    const status = searchParams.get('status');
+    const plan = searchParams.get('plan');
 
-    let filtered = [...mockOrganizations];
-
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(
-        o => o.name.toLowerCase().includes(searchLower) || o.slug.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Status filter
-    if (status) {
-      filtered = filtered.filter(o => o.status === status);
-    }
-
-    // Plan filter
-    if (plan) {
-      filtered = filtered.filter(o => o.plan === plan);
-    }
-
-    // Health bucket filter
-    if (healthBucket) {
-      const [min, max] = healthBucket.split('-').map(Number);
-      filtered = filtered.filter(o => o.healthScore >= min && o.healthScore <= max);
-    }
-
-    // Pagination
-    const total = filtered.length;
-    const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
-    const data = filtered.slice(offset, offset + limit);
+
+    let query = supabaseAdmin
+      .from('organizations')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%`);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (plan) {
+      query = query.eq('plan', plan);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Get organizations error:', error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       ok: true,
       data: {
-        items: data,
+        items: data ?? [],
         pagination: {
           page,
           limit,
-          total,
-          totalPages,
+          total: count ?? 0,
+          totalPages: Math.ceil((count ?? 0) / limit),
         },
       },
     });
   } catch (error) {
     console.error('Get organizations error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

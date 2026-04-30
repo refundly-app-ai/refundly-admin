@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockMembers } from '@/lib/mock-data';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// TODO: replace with real data source
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -12,56 +11,77 @@ export async function GET(request: NextRequest) {
     const banned = searchParams.get('banned');
     const neverLoggedIn = searchParams.get('neverLoggedIn');
 
-    let filtered = [...mockMembers];
+    const offset = (page - 1) * limit;
 
-    // Search filter
+    let query = supabaseAdmin
+      .from('user_org_roles')
+      .select(`
+        user_id,
+        role,
+        org_id,
+        profiles!inner(full_name, email, whatsapp_verified, banned),
+        organizations!inner(name, slug)
+      `, { count: 'exact' })
+      .range(offset, offset + limit - 1)
+      .order('user_id');
+
+    if (role) {
+      query = query.eq('role', role);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Get members error:', error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    let items = (data ?? []).map((row: any) => ({
+      id: row.user_id,
+      email: row.profiles?.email,
+      fullName: row.profiles?.full_name,
+      role: row.role,
+      orgId: row.org_id,
+      orgName: row.organizations?.name,
+      orgSlug: row.organizations?.slug,
+      banned: row.profiles?.banned ?? false,
+      whatsappVerified: row.profiles?.whatsapp_verified ?? false,
+    }));
+
     if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(
-        m => m.email.toLowerCase().includes(searchLower) || m.fullName.toLowerCase().includes(searchLower)
+      const s = search.toLowerCase();
+      items = items.filter(
+        (m: any) =>
+          m.email?.toLowerCase().includes(s) ||
+          m.fullName?.toLowerCase().includes(s)
       );
     }
 
-    // Role filter
-    if (role) {
-      filtered = filtered.filter(m => m.orgs.some(o => o.role === role));
-    }
-
-    // Banned filter
     if (banned === 'true') {
-      filtered = filtered.filter(m => m.banned);
+      items = items.filter((m: any) => m.banned);
     } else if (banned === 'false') {
-      filtered = filtered.filter(m => !m.banned);
+      items = items.filter((m: any) => !m.banned);
     }
 
-    // Never logged in filter
     if (neverLoggedIn === 'true') {
-      filtered = filtered.filter(m => !m.lastSignInAt);
+      // Filter by auth.users last_sign_in_at would need admin API
+      // For now we skip this filter as it requires joining auth.users
     }
-
-    // Pagination
-    const total = filtered.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    const data = filtered.slice(offset, offset + limit);
 
     return NextResponse.json({
       ok: true,
       data: {
-        items: data,
+        items,
         pagination: {
           page,
           limit,
-          total,
-          totalPages,
+          total: count ?? items.length,
+          totalPages: Math.ceil((count ?? items.length) / limit),
         },
       },
     });
   } catch (error) {
     console.error('Get members error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

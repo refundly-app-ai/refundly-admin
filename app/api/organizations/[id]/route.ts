@@ -1,43 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockOrganizations, mockMembers, mockActivities, mockBillingEvents, mockIntegrations } from '@/lib/mock-data';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// TODO: replace with real data source
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const org = mockOrganizations.find(o => o.id === id);
 
-    if (!org) {
-      return NextResponse.json(
-        { ok: false, error: 'Organização não encontrada', status: 404 },
-        { status: 404 }
-      );
+    const { data: healthData, error } = await supabaseAdmin.rpc('superadmin_org_health', { p_org_id: id });
+
+    if (error) {
+      console.error('Org health RPC error:', error);
+      // Fallback: query organization directly
+      const { data: org, error: orgError } = await supabaseAdmin
+        .from('organizations')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (orgError || !org) {
+        return NextResponse.json({ ok: false, error: 'Organização não encontrada' }, { status: 404 });
+      }
+
+      return NextResponse.json({ ok: true, data: { organization: org, members: [], activities: [], billingEvents: [], integrations: [] } });
     }
 
-    // Get related data
-    const members = mockMembers.filter(m => m.orgs.some(o => o.orgId === id));
-    const activities = mockActivities.filter(a => a.orgId === id);
-    const billingEvents = mockBillingEvents.filter(b => b.orgId === id);
-    const integrations = mockIntegrations.filter(i => i.orgId === id);
+    const result = Array.isArray(healthData) ? healthData[0] : healthData;
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        organization: org,
-        members,
-        activities: activities.slice(0, 50),
-        billingEvents: billingEvents.slice(0, 20),
-        integrations,
-      },
-    });
+    if (!result) {
+      return NextResponse.json({ ok: false, error: 'Organização não encontrada' }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, data: result });
   } catch (error) {
     console.error('Get organization error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

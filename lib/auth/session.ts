@@ -13,9 +13,10 @@ export interface SessionData {
   expiresAt?: number;
 }
 
+// Use __Host- prefix in production (enforces Secure + Path=/), plain name in dev
 export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long_for_dev',
-  cookieName: 'admin_session',
+  cookieName: process.env.NODE_ENV === 'production' ? '__Host-pa_sess' : 'pa_sess',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
@@ -24,17 +25,13 @@ export const sessionOptions: SessionOptions = {
   },
 };
 
-// For Server Components / Server Actions
 export async function getSession() {
   const cookieStore = await cookies();
-  const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
-  return session;
+  return getIronSession<SessionData>(cookieStore, sessionOptions);
 }
 
-// For API Routes - takes request/response
 export async function getSessionFromRequest(req: NextRequest, res: NextResponse): Promise<IronSession<SessionData>> {
-  const session = await getIronSession<SessionData>(req, res, sessionOptions);
-  return session;
+  return getIronSession<SessionData>(req, res, sessionOptions);
 }
 
 export async function createSession(data: Partial<SessionData>) {

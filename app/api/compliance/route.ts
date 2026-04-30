@@ -1,78 +1,61 @@
 import { NextResponse } from 'next/server';
-import { mockOrganizations } from '@/lib/mock-data';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// TODO: replace with real data source
 export async function GET() {
   try {
-    // Generate mock compliance data
-    const duplicates = [
-      {
-        id: 'dup_1',
-        type: 'email_duplicate',
-        severity: 'warning' as const,
-        orgId: mockOrganizations[0]?.id,
-        orgName: mockOrganizations[0]?.name,
-        description: 'E-mail duplicado encontrado em múltiplas contas',
-        details: { email: 'user@example.com', accounts: 2 },
-        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      },
-      {
-        id: 'dup_2',
-        type: 'phone_duplicate',
-        severity: 'info' as const,
-        orgId: mockOrganizations[1]?.id,
-        orgName: mockOrganizations[1]?.name,
-        description: 'Telefone duplicado encontrado',
-        details: { phone: '+55 11 99999-9999', accounts: 2 },
-        createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-      },
-    ];
+    const [violationsResult, fingerprintsResult, orgsResult] = await Promise.all([
+      supabaseAdmin
+        .from('expense_violations')
+        .select('*, organizations(name, slug)')
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabaseAdmin
+        .from('receipt_fingerprints')
+        .select('*, organizations(name, slug)')
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabaseAdmin
+        .from('organizations')
+        .select('id, name, slug, status, health_score')
+        .eq('status', 'active')
+        .lt('health_score', 40)
+        .limit(20),
+    ]);
 
-    const violations = [
-      {
-        id: 'viol_1',
-        type: 'gdpr_retention',
-        severity: 'critical' as const,
-        orgId: mockOrganizations[2]?.id,
-        orgName: mockOrganizations[2]?.name,
-        description: 'Dados pessoais retidos além do período permitido',
-        details: { dataType: 'user_logs', retentionDays: 90, actualDays: 120 },
-        createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-      },
-      {
-        id: 'viol_2',
-        type: 'password_policy',
-        severity: 'warning' as const,
-        orgId: mockOrganizations[3]?.id,
-        orgName: mockOrganizations[3]?.name,
-        description: 'Política de senha não atende requisitos mínimos',
-        details: { currentMinLength: 6, requiredMinLength: 8 },
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      },
-    ];
+    const violations = (violationsResult.data ?? []).map((v: any) => ({
+      id: v.id,
+      type: v.violation_type ?? v.type,
+      severity: v.severity ?? 'warning',
+      orgId: v.org_id,
+      orgName: v.organizations?.name,
+      description: v.description,
+      details: v.details ?? {},
+      createdAt: v.created_at,
+    }));
 
-    const riskQueue = [
-      {
-        id: 'risk_1',
-        type: 'high_churn_risk',
-        severity: 'critical' as const,
-        orgId: mockOrganizations[4]?.id,
-        orgName: mockOrganizations[4]?.name,
-        description: 'Organização com alto risco de churn',
-        details: { healthScore: 25, lastActivity: '30 dias atrás' },
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-      {
-        id: 'risk_2',
-        type: 'usage_anomaly',
-        severity: 'warning' as const,
-        orgId: mockOrganizations[5]?.id,
-        orgName: mockOrganizations[5]?.name,
-        description: 'Padrão de uso anormal detectado',
-        details: { usageSpike: '500%', period: 'last 24h' },
-        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      },
-    ];
+    const duplicates = (fingerprintsResult.data ?? []).map((f: any) => ({
+      id: f.id,
+      type: 'receipt_duplicate',
+      severity: 'warning' as const,
+      orgId: f.org_id,
+      orgName: f.organizations?.name,
+      description: 'Recibo duplicado detectado',
+      details: { fingerprint: f.fingerprint, occurrences: f.occurrences ?? 2 },
+      createdAt: f.created_at,
+    }));
+
+    const riskQueue = (orgsResult.data ?? []).map((o: any) => ({
+      id: `risk_${o.id}`,
+      type: 'high_churn_risk',
+      severity: 'critical' as const,
+      orgId: o.id,
+      orgName: o.name,
+      description: 'Organização com alto risco de churn (health score baixo)',
+      details: { healthScore: o.health_score },
+      createdAt: new Date().toISOString(),
+    }));
+
+    const allIssues = [...violations, ...duplicates, ...riskQueue];
 
     return NextResponse.json({
       ok: true,
@@ -81,18 +64,24 @@ export async function GET() {
         violations,
         riskQueue,
         summary: {
-          totalIssues: duplicates.length + violations.length + riskQueue.length,
-          critical: violations.filter(v => v.severity === 'critical').length + riskQueue.filter(r => r.severity === 'critical').length,
-          warnings: duplicates.filter(d => d.severity === 'warning').length + violations.filter(v => v.severity === 'warning').length + riskQueue.filter(r => r.severity === 'warning').length,
-          info: duplicates.filter(d => d.severity === 'info').length,
+          totalIssues: allIssues.length,
+          critical: allIssues.filter(i => i.severity === 'critical').length,
+          warnings: allIssues.filter(i => i.severity === 'warning').length,
+          info: allIssues.filter(i => i.severity === 'info').length,
         },
       },
     });
   } catch (error) {
     console.error('Get compliance error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    // Return empty data gracefully if tables don't exist yet
+    return NextResponse.json({
+      ok: true,
+      data: {
+        duplicates: [],
+        violations: [],
+        riskQueue: [],
+        summary: { totalIssues: 0, critical: 0, warnings: 0, info: 0 },
+      },
+    });
   }
 }

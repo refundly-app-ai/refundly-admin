@@ -1,8 +1,5 @@
-import { Activity } from './types';
-
-// TODO: replace with real data source
-// In-memory audit log for development
-const auditLog: Activity[] = [];
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import type { Activity } from './types';
 
 interface LogActivityParams {
   adminId: string | null;
@@ -15,40 +12,62 @@ interface LogActivityParams {
   ua?: string | null;
 }
 
-export async function logActivity(params: LogActivityParams): Promise<Activity> {
-  const activity: Activity = {
-    id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    orgId: params.orgId ?? null,
-    actorId: params.adminId,
-    action: params.action,
-    entity: params.entity,
-    entityId: params.entityId,
-    metadata: {
-      ...params.metadata,
-      userAgent: params.ua,
-    },
-    ip: params.ip ?? null,
-    createdAt: new Date().toISOString(),
-  };
-
-  auditLog.unshift(activity);
-  
-  // Keep only last 10000 entries in memory
-  if (auditLog.length > 10000) {
-    auditLog.pop();
+export async function logActivity(params: LogActivityParams): Promise<void> {
+  try {
+    await supabaseAdmin.from('platform_audit_logs').insert({
+      admin_id: params.adminId,
+      action: params.action,
+      entity: params.entity,
+      entity_id: params.entityId,
+      org_id: params.orgId ?? null,
+      metadata: {
+        ...params.metadata,
+        user_agent: params.ua,
+      },
+      ip: params.ip ?? null,
+    });
+  } catch (err) {
+    console.error('Failed to write audit log:', err);
   }
-
-  return activity;
 }
 
-export function getAuditLog(): Activity[] {
-  return auditLog;
+export async function getAuditLog(): Promise<Activity[]> {
+  const { data } = await supabaseAdmin
+    .from('platform_audit_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  return (data || []).map(row => ({
+    id: row.id,
+    orgId: row.org_id,
+    actorId: row.admin_id,
+    action: row.action,
+    entity: row.entity,
+    entityId: row.entity_id,
+    metadata: row.metadata || {},
+    ip: row.ip,
+    createdAt: row.created_at,
+  }));
 }
 
-export function getAuditLogByOrg(orgId: string): Activity[] {
-  return auditLog.filter(a => a.orgId === orgId);
-}
+export async function getAuditLogByOrg(orgId: string): Promise<Activity[]> {
+  const { data } = await supabaseAdmin
+    .from('platform_audit_logs')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(100);
 
-export function getAuditLogByAdmin(adminId: string): Activity[] {
-  return auditLog.filter(a => a.actorId === adminId);
+  return (data || []).map(row => ({
+    id: row.id,
+    orgId: row.org_id,
+    actorId: row.admin_id,
+    action: row.action,
+    entity: row.entity,
+    entityId: row.entity_id,
+    metadata: row.metadata || {},
+    ip: row.ip,
+    createdAt: row.created_at,
+  }));
 }

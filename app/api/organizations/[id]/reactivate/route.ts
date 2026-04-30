@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockOrganizations } from '@/lib/mock-data';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { logActivity } from '@/lib/audit';
 
-// TODO: replace with real data source
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,16 +13,24 @@ export async function POST(
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
     const ua = request.headers.get('user-agent') || 'unknown';
 
-    const org = mockOrganizations.find(o => o.id === id);
-    if (!org) {
-      return NextResponse.json(
-        { ok: false, error: 'Organização não encontrada', status: 404 },
-        { status: 404 }
-      );
+    const { data: org, error: fetchError } = await supabaseAdmin
+      .from('organizations')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !org) {
+      return NextResponse.json({ ok: false, error: 'Organização não encontrada' }, { status: 404 });
     }
 
-    const previousStatus = org.status;
-    org.status = 'active';
+    const { error } = await supabaseAdmin
+      .from('organizations')
+      .update({ status: 'active' })
+      .eq('id', id);
+
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
 
     await logActivity({
       adminId: session.adminId || null,
@@ -31,20 +38,14 @@ export async function POST(
       entity: 'organization',
       entityId: id,
       orgId: id,
-      metadata: { previousStatus },
+      metadata: { previousStatus: org.status },
       ip,
       ua,
     });
 
-    return NextResponse.json({
-      ok: true,
-      data: { reactivated: true },
-    });
+    return NextResponse.json({ ok: true, data: { reactivated: true } });
   } catch (error) {
     console.error('Reactivate organization error:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Erro interno do servidor', status: 500 },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }
