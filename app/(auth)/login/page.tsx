@@ -178,10 +178,6 @@ export default function LoginPage() {
               )}
             </Button>
 
-            <p className="text-center text-xs text-muted-foreground mt-4">
-              Use <code className="font-mono bg-muted px-1 py-0.5 rounded">admin@example.com</code> e{' '}
-              <code className="font-mono bg-muted px-1 py-0.5 rounded">admin123</code> para testar
-            </p>
           </form>
         ) : (
           <form onSubmit={totpForm.handleSubmit(onTOTPSubmit)} className="space-y-4">
@@ -200,9 +196,6 @@ export default function LoginPage() {
               {totpForm.formState.errors.code && (
                 <p className="text-sm text-destructive">{totpForm.formState.errors.code.message}</p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Use <code className="font-mono bg-muted px-1 py-0.5 rounded">123456</code> para testar
-              </p>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
