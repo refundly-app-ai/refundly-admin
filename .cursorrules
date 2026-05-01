@@ -1,0 +1,100 @@
+# Refundly Admin — Regras do Cursor
+
+## Identidade do Projeto
+
+O **Refundly Admin** é o painel interno da plataforma Refundly, usado pela equipe para gerenciar organizações, membros, billing, compliance e operações. Não é o app dos clientes.
+
+Stack: **Next.js 16** (App Router) + **Supabase** (service role, sem RLS) + **TypeScript strict** + **Tailwind CSS** + **shadcn/ui** + **iron-session** + **Upstash Redis** + **Argon2** + **OTPAuth** (TOTP) + **React Hook Form** + **Zod** + **TanStack React Query** + **Recharts**.
+
+## Idioma
+
+- Responda SEMPRE em português (pt-BR).
+- Nomes de variáveis, funções e componentes em inglês.
+- Commits em português.
+
+## Contexto Crítico
+
+Leia os arquivos de contexto antes de sugerir código:
+
+1. `.cursor/rules/architecture.md` — decisões arquiteturais, estrutura de rotas, auth flow
+2. `.cursor/rules/security.md` — o que NÃO fazer, regras críticas de segurança
+3. `.cursor/rules/database.md` — tabelas, client Supabase, tipos de domínio
+4. `.cursor/rules/conventions.md` — padrões de código, imports, componentes, API routes
+5. `.cursor/rules/emails.md` — status do sistema de emails
+
+## Regras Gerais
+
+### Sempre faça:
+- Use TypeScript strict em todo código novo.
+- Valide inputs com Zod em todas as API Routes.
+- Verifique sessão (`getSession()`) no início de toda API Route.
+- Registre ações relevantes via `logActivity()` de `lib/audit.ts`.
+- Use `supabaseAdmin` de `lib/supabase/admin.ts` para queries — nunca crie novo client.
+- Use tipos de `lib/types.ts` — nunca redefina `Organization`, `Member`, `PlatformAdmin` localmente.
+- Use server components por padrão. Client components só com `useState`, `useEffect`, eventos, React Hook Form ou TanStack Query.
+- Use `cn()` de `lib/utils.ts` para merge de classes Tailwind.
+- Aplique rate limiting em endpoints de auth e ações sensíveis.
+
+### Nunca faça:
+- NUNCA importe `supabaseAdmin` em arquivos com `"use client"` — expõe a service role key no browser.
+- NUNCA hardcode secrets, URLs ou API keys.
+- NUNCA use fallback inseguro para variáveis de ambiente — falhe explicitamente.
+- NUNCA adicione bypass de 2FA, nem em dev.
+- NUNCA exponha detalhes de erro interno ao cliente — use mensagem genérica.
+- NUNCA proteja rotas apenas no frontend — use o middleware (`proxy.ts`).
+- NUNCA use localStorage para sessão ou tokens.
+- NUNCA use `as any` sem justificativa.
+- NUNCA sugira Prisma — não existe neste projeto.
+- NUNCA sugira `@supabase/ssr` ou `createBrowserClient` — não há Supabase Auth aqui.
+- NUNCA use `NEXT_PUBLIC_` para secrets — todas as variáveis são server-only.
+
+### Quando em dúvida:
+- Verifique se a variável de ambiente existe e falha explicitamente se ausente.
+- Se a ação afeta dados de clientes ou credenciais de admin, peça confirmação antes de implementar.
+- Se não tem certeza se um campo é usado, faça busca no código antes de remover.
+
+## Estrutura Resumida
+
+```
+app/
+├── (auth)/login, setup-2fa, locked   # Auth flow com 2FA
+├── dashboard/                        # Painel principal
+│   ├── organizations/[id]            # Gestão de orgs
+│   ├── members/[id]                  # Gestão de membros
+│   ├── audit, billing, compliance,
+│       integrations, operations,
+│       settings/                     # Demais módulos
+└── api/                              # API Routes (auth, admins, orgs, members, ...)
+
+lib/
+├── auth/          # session, totp, crypto, password, rate-limit
+├── db/admins.ts   # Queries em platform_admins
+├── supabase/admin.ts  # Client service role
+├── validators/    # Schemas Zod (auth, member, organization)
+├── audit.ts       # logActivity()
+├── redis.ts       # Cache + rate limit (Upstash)
+└── types.ts       # Todos os tipos de domínio
+
+components/
+├── dashboard/     # Sidebar, topbar, charts, metrics, data-table...
+└── ui/            # shadcn/ui components
+
+proxy.ts           # Middleware — proteção de rotas server-side
+```
+
+## Referência Rápida
+
+| Preciso de... | Use... |
+|---|---|
+| Query no banco | `supabaseAdmin` de `lib/supabase/admin.ts` (só server-side) |
+| Sessão do admin | `getSession()` de `lib/auth/session.ts` |
+| Hash de senha | `hashPassword()` / `verifyPassword()` de `lib/auth/password.ts` |
+| TOTP | `lib/auth/totp.ts` e `lib/auth/crypto.ts` |
+| Rate limit | `checkRateLimit()` de `lib/auth/rate-limit.ts` |
+| Log de auditoria | `logActivity()` de `lib/audit.ts` |
+| Cache Redis | `cacheMetrics()` / `getCachedMetrics()` de `lib/redis.ts` |
+| Validação de input | Schemas Zod em `lib/validators/` |
+| Tipos de domínio | `lib/types.ts` |
+| Merge de classes | `cn()` de `lib/utils.ts` |
+| Componentes UI | shadcn/ui em `components/ui/` |
+| Gráficos | Recharts via `components/dashboard/charts.tsx` |
