@@ -21,6 +21,7 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
+  FileWarning,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,6 +47,7 @@ interface ComplianceSummary {
 interface ComplianceData {
   violations: ComplianceIssue[];
   duplicates: ComplianceIssue[];
+  divergentReceipts: ComplianceIssue[];
   riskQueue: ComplianceIssue[];
   summary: ComplianceSummary;
 }
@@ -59,6 +61,7 @@ const severityConfig: Record<string, { color: string; label: string }> = {
 const violationTypeLabels: Record<string, string> = {
   expense_limit_exceeded: 'Limite de despesa excedido',
   receipt_duplicate: 'Recibo duplicado',
+  divergent_receipt: 'Comprovante divergente',
   high_churn_risk: 'Alto risco de churn',
   missing_receipt: 'Recibo ausente',
   policy_violation: 'Violação de política',
@@ -135,6 +138,7 @@ export default function CompliancePage() {
   const summary = data?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, info: 0 };
   const violations = data?.violations ?? [];
   const duplicates = data?.duplicates ?? [];
+  const divergentReceipts = data?.divergentReceipts ?? [];
   const riskQueue = data?.riskQueue ?? [];
 
   return (
@@ -154,7 +158,7 @@ export default function CompliancePage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -186,6 +190,16 @@ export default function CompliancePage() {
         </Card>
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Comprovantes Divergentes</CardTitle>
+            <FileWarning className="h-4 w-4 text-warning" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-warning">{divergentReceipts.length}</div>
+            <p className="text-xs text-muted-foreground">dados inconsistentes</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Risco de Churn</CardTitle>
             <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
@@ -204,6 +218,9 @@ export default function CompliancePage() {
           </TabsTrigger>
           <TabsTrigger value="duplicates">
             Duplicatas ({duplicates.length})
+          </TabsTrigger>
+          <TabsTrigger value="divergent">
+            Comprovantes Divergentes ({divergentReceipts.length})
           </TabsTrigger>
           <TabsTrigger value="risk">
             Risco de Churn ({riskQueue.length})
@@ -229,10 +246,25 @@ export default function CompliancePage() {
                 <Copy className="h-4 w-4" />
                 Recibos Duplicados
               </CardTitle>
-              <CardDescription>Recibos enviados mais de uma vez (fingerprint match)</CardDescription>
+              <CardDescription>Recibos enviados mais de uma vez (fingerprint idêntico)</CardDescription>
             </CardHeader>
             <CardContent>
               <IssueTable issues={duplicates} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="divergent">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileWarning className="h-4 w-4" />
+                Comprovantes Divergentes
+              </CardTitle>
+              <CardDescription>Comprovantes cujos dados não batem com a despesa registrada (valor, data, fornecedor)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <IssueTable issues={divergentReceipts} />
             </CardContent>
           </Card>
         </TabsContent>

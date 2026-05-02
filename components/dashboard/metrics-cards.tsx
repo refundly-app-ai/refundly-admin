@@ -77,16 +77,16 @@ interface MetricsCardsProps {
 
 export function MetricsCards({ metrics }: MetricsCardsProps) {
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BRL',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
   };
 
   const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('en-US').format(value);
+    return new Intl.NumberFormat('pt-BR').format(value);
   };
 
   return (
@@ -102,7 +102,6 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
       <MetricCard
         title="Total de Membros"
         value={formatNumber(metrics.totalMembers)}
-        change={8.2}
         changeLabel="vs mês anterior"
         icon={Users}
         iconColor="text-chart-2"
@@ -110,7 +109,6 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
       <MetricCard
         title="Receita Recorrente Mensal"
         value={formatCurrency(metrics.totalMRR)}
-        change={metrics.growthRate}
         changeLabel="vs mês anterior"
         icon={DollarSign}
         iconColor="text-chart-3"
@@ -118,15 +116,13 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
       <MetricCard
         title="Trials Ativos"
         value={metrics.activeTrials}
-        change={15.3}
-        changeLabel="vs mês anterior"
         icon={Beaker}
         iconColor="text-chart-4"
       />
       <MetricCard
         title="Taxa de Churn"
         value={`${metrics.churnRate}%`}
-        change={-0.5}
+        change={metrics.churnRate === 0 ? undefined : -metrics.churnRate}
         changeLabel="vs mês anterior"
         icon={Activity}
         iconColor="text-destructive"
@@ -134,23 +130,19 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
       <MetricCard
         title="Saúde Média"
         value={metrics.avgHealthScore}
-        change={2.1}
-        changeLabel="vs mês anterior"
         icon={Activity}
         iconColor="text-success"
       />
       <MetricCard
         title="Conformidade Média"
         value={metrics.avgComplianceScore}
-        change={1.8}
-        changeLabel="vs mês anterior"
         icon={Shield}
         iconColor="text-chart-1"
       />
       <MetricCard
         title="Taxa de Crescimento"
         value={`${metrics.growthRate}%`}
-        change={3.2}
+        change={metrics.growthRate}
         changeLabel="vs mês anterior"
         icon={TrendingUp}
         iconColor="text-success"

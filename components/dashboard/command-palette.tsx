@@ -55,84 +55,84 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput placeholder="Digite um comando ou pesquise..." />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        
-        <CommandGroup heading="Navigation">
+        <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+
+        <CommandGroup heading="Navegação">
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard'))}>
             <LayoutDashboard className="mr-2 h-4 w-4" />
-            Overview
+            Visão Geral
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/organizations'))}>
             <Building2 className="mr-2 h-4 w-4" />
-            Organizations
+            Organizações
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/members'))}>
             <Users className="mr-2 h-4 w-4" />
-            Members
+            Membros
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/compliance'))}>
             <Shield className="mr-2 h-4 w-4" />
-            Compliance
+            Conformidade
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/integrations'))}>
             <Plug className="mr-2 h-4 w-4" />
-            Integrations
+            Integrações
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/billing'))}>
             <CreditCard className="mr-2 h-4 w-4" />
-            Billing
+            Faturamento
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/operations'))}>
             <Activity className="mr-2 h-4 w-4" />
-            Operations
+            Operações
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/audit'))}>
             <FileText className="mr-2 h-4 w-4" />
-            Audit Logs
+            Logs de Auditoria
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/settings'))}>
             <Settings className="mr-2 h-4 w-4" />
-            Settings
+            Configurações
           </CommandItem>
         </CommandGroup>
 
         <CommandSeparator />
 
-        <CommandGroup heading="Quick Actions">
+        <CommandGroup heading="Ações Rápidas">
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/organizations?action=create'))}>
             <Plus className="mr-2 h-4 w-4" />
-            Create Organization
+            Criar Organização
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/members?action=invite'))}>
             <UserPlus className="mr-2 h-4 w-4" />
-            Invite Member
+            Convidar Membro
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push('/dashboard/settings'))}>
             <Flag className="mr-2 h-4 w-4" />
-            Manage Feature Flags
+            Gerenciar Feature Flags
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => window.location.reload())}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh Data
+            Atualizar Dados
           </CommandItem>
         </CommandGroup>
 
         <CommandSeparator />
 
-        <CommandGroup heading="Search">
+        <CommandGroup heading="Pesquisar">
           <CommandItem>
             <Search className="mr-2 h-4 w-4" />
-            Search Organizations...
+            Buscar Organizações...
           </CommandItem>
           <CommandItem>
             <Search className="mr-2 h-4 w-4" />
-            Search Members...
+            Buscar Membros...
           </CommandItem>
           <CommandItem>
             <Search className="mr-2 h-4 w-4" />
-            Search Audit Logs...
+            Buscar Logs de Auditoria...
           </CommandItem>
         </CommandGroup>
       </CommandList>

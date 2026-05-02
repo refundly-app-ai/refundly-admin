@@ -1,28 +1,33 @@
 import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth/session';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('*, organizations(name, slug)')
-      .order('last_seen_at', { ascending: false });
+    const session = await getSession();
+    if (!session.adminId || !session.totpVerified) {
+      return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
+    const { data, error } = await supabaseAdmin.rpc('superadmin_integrations');
 
     if (error) {
       console.error('Get integrations error:', error);
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const integrations = (data ?? []).map((row: any) => ({
+    const integrations = (data?.integrations ?? []).map((row: any) => ({
       id: row.id,
       orgId: row.org_id,
-      orgName: row.organizations?.name ?? 'Desconhecido',
-      orgSlug: row.organizations?.slug ?? '',
-      status: row.status,
-      lastSeenAt: row.last_seen_at,
-      instanceName: row.instance_name ?? row.name,
+      orgName: row.org_name ?? 'Desconhecido',
+      orgSlug: row.org_slug ?? '',
+      instanceId: row.instance_id,
+      name: row.name,
       phoneNumber: row.phone_number,
-      connectionState: row.connection_state,
+      status: row.status,
+      isActive: row.is_active,
+      connectedAt: row.connected_at,
+      provider: row.provider,
     }));
 
     const connected = integrations.filter((i: any) => i.status === 'connected').length;
@@ -33,12 +38,7 @@ export async function GET() {
       ok: true,
       data: {
         integrations,
-        summary: {
-          total: integrations.length,
-          connected,
-          degraded,
-          disconnected,
-        },
+        summary: { total: integrations.length, connected, degraded, disconnected },
       },
     });
   } catch (error) {

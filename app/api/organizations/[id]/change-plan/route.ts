@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { logActivity } from '@/lib/audit';
 
 const changePlanSchema = z.object({
-  newPlan: z.enum(['free', 'basic', 'pro']),
+  newPlan: z.enum(['free', 'essential', 'enterprise']),
   confirmSlug: z.string(),
 });
 

@@ -45,7 +45,7 @@ interface DataTableProps<T> {
 export function DataTable<T extends { id: string }>({
   data,
   columns,
-  searchPlaceholder = 'Search...',
+  searchPlaceholder = 'Buscar...',
   searchKey,
   filters = [],
   pageSize = 10,
@@ -123,7 +123,7 @@ export function DataTable<T extends { id: string }>({
               <SelectValue placeholder={filter.label} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All {filter.label}</SelectItem>
+              <SelectItem value="all">Todos ({filter.label})</SelectItem>
               {filter.options.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}

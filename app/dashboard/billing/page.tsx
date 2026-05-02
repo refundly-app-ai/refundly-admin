@@ -106,7 +106,7 @@ export default function BillingPage() {
     );
   }
 
-  const metrics = data?.metrics ?? { mrr: 0, arr: 0, arpu: 0, churnRate: 0, dunningTotal: 0 };
+  const metrics = { churnRate: 0, dunningTotal: 0, mrr: 0, arr: 0, arpu: 0, ...data?.metrics };
   const events = data?.recentEvents ?? [];
   const blockedOrgs = data?.blockedOrgs ?? [];
 
@@ -120,9 +120,11 @@ export default function BillingPage() {
             Métricas financeiras e eventos de cobrança via Asaas
           </p>
         </div>
-        <Button>
-          <ExternalLink className="mr-2 h-4 w-4" />
-          Painel Asaas
+        <Button asChild>
+          <a href="https://www.asaas.com/login/auth" target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Painel Asaas
+          </a>
         </Button>
       </div>
 

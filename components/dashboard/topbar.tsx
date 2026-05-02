@@ -177,7 +177,7 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
                 {admin ? (
                   <>
                     <span className="text-sm font-medium">{admin.fullName}</span>
-                    <span className="text-xs text-muted-foreground">Super Admin</span>
+                    <span className="text-xs text-muted-foreground">Painel Admin</span>
                   </>
                 ) : (
                   <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />

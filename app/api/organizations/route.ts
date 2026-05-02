@@ -24,24 +24,42 @@ export async function GET(request: NextRequest) {
     if (search) {
       query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%`);
     }
-    if (status) {
-      query = query.eq('status', status);
+    if (status === 'active') {
+      query = query.eq('is_active', true);
+    } else if (status === 'suspended' || status === 'blocked') {
+      query = query.eq('is_active', false);
+    } else if (status === 'trial') {
+      query = query.eq('billing_status', 'trial');
     }
     if (plan) {
-      query = query.eq('plan', plan);
+      query = query.eq('billing_status', plan);
     }
 
-    const { data, error, count } = await query;
+    const [{ data, error, count }, statsResult] = await Promise.all([
+      query,
+      supabaseAdmin.rpc('superadmin_org_stats'),
+    ]);
 
     if (error) {
       console.error('Get organizations error:', error);
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
+    const statsMap = new Map<string, { member_count: number; mrr: number }>();
+    for (const s of statsResult.data ?? []) {
+      statsMap.set(s.org_id, { member_count: Number(s.member_count), mrr: Number(s.mrr) });
+    }
+
+    const items = (data ?? []).map((org: any) => ({
+      ...org,
+      member_count: statsMap.get(org.id)?.member_count ?? 0,
+      mrr: statsMap.get(org.id)?.mrr ?? 0,
+    }));
+
     return NextResponse.json({
       ok: true,
       data: {
-        items: data ?? [],
+        items,
         pagination: {
           page,
           limit,
@@ -59,7 +77,7 @@ export async function GET(request: NextRequest) {
 const createOrgSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   slug: z.string().min(2, 'Slug deve ter pelo menos 2 caracteres').regex(/^[a-z0-9-]+$/, 'Slug deve conter apenas letras minúsculas, números e hífens'),
-  plan: z.enum(['free', 'basic', 'pro', 'enterprise']).default('free'),
+  plan: z.enum(['free', 'essential', 'enterprise']).default('free'),
   domain: z.string().optional(),
 });
 

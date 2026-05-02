@@ -72,14 +72,13 @@ const statusConfig = {
   active: { label: 'Ativo', variant: 'default' as const, className: 'bg-success/10 text-success border-success/20' },
   suspended: { label: 'Suspenso', variant: 'secondary' as const, className: 'bg-warning/10 text-warning border-warning/20' },
   blocked: { label: 'Bloqueado', variant: 'destructive' as const, className: 'bg-destructive/10 text-destructive border-destructive/20' },
-  churned: { label: 'Churned', variant: 'outline' as const, className: 'bg-muted text-muted-foreground' },
+  churned: { label: 'Cancelado', variant: 'outline' as const, className: 'bg-muted text-muted-foreground' },
   trial: { label: 'Trial', variant: 'secondary' as const, className: 'bg-info/10 text-info border-info/20' },
 };
 
 const planConfig = {
-  free: { label: 'Free', className: 'bg-muted text-muted-foreground' },
-  basic: { label: 'Basic', className: 'bg-info/10 text-info border-info/20' },
-  pro: { label: 'Pro', className: 'bg-primary/10 text-primary border-primary/20' },
+  free: { label: 'Gratuito', className: 'bg-muted text-muted-foreground' },
+  essential: { label: 'Essencial', className: 'bg-info/10 text-info border-info/20' },
   enterprise: { label: 'Enterprise', className: 'bg-success/10 text-success border-success/20' },
 };
 
@@ -704,9 +703,9 @@ export default function OrgDetailPage() {
                   <SelectValue placeholder="Selecione um plano" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="free">Gratuito</SelectItem>
+                  <SelectItem value="essential">Essencial</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
                 </SelectContent>
               </Select>
             </div>

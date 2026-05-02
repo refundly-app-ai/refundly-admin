@@ -34,12 +34,12 @@ export async function GET() {
     const [orgsResult, eventsResult, requestsResult] = await Promise.all([
       supabaseAdmin
         .from('organizations')
-        .select('id, plan, status, mrr, created_at')
+        .select('id, billing_status, is_active, created_at')
         .gte('created_at', twelveMonthsAgo.toISOString()),
       supabaseAdmin
         .from('asaas_billing_events')
-        .select('amount, status, created_at')
-        .eq('status', 'paid')
+        .select('payload_json, status, created_at')
+        .eq('status', 'processed')
         .gte('created_at', twelveMonthsAgo.toISOString()),
       supabaseAdmin
         .from('platform_audit_logs')
@@ -69,7 +69,8 @@ export async function GET() {
     const mrrFromEvents = new Map<string, number>();
     for (const e of events) {
       const k = monthKey(new Date(e.created_at));
-      mrrFromEvents.set(k, (mrrFromEvents.get(k) ?? 0) + (e.amount ?? 0));
+      const amount = (e.payload_json as any)?.payment?.value ?? 0;
+      mrrFromEvents.set(k, (mrrFromEvents.get(k) ?? 0) + amount);
     }
     const useEvents = events.length > 0;
 
@@ -77,13 +78,7 @@ export async function GET() {
       date: m.label,
       value: useEvents
         ? Math.round(mrrFromEvents.get(m.key) ?? 0)
-        : Math.round(
-            orgs
-              .filter(
-                (o: any) => o.status === 'active' && new Date(o.created_at) <= new Date(Date.UTC(m.date.getUTCFullYear(), m.date.getUTCMonth() + 1, 0)),
-              )
-              .reduce((sum: number, o: any) => sum + (o.mrr || 0), 0),
-          ),
+        : 0,
     }));
 
     const signupsSeries = months.map((m) => ({
@@ -95,18 +90,17 @@ export async function GET() {
     const tierCounts = new Map<string, number>();
     const { data: allOrgs } = await supabaseAdmin
       .from('organizations')
-      .select('plan, status')
-      .neq('status', 'churned');
+      .select('billing_status, is_active')
+      .eq('is_active', true);
 
     for (const o of allOrgs ?? []) {
-      const plan = (o as any).plan || 'free';
+      const plan = (o as any).billing_status || 'free';
       tierCounts.set(plan, (tierCounts.get(plan) ?? 0) + 1);
     }
 
     const planLabels: Record<string, string> = {
       free: 'Gratuito',
-      basic: 'Básico',
-      pro: 'Pro',
+      essential: 'Essencial',
       enterprise: 'Enterprise',
     };
     const tierDistribution = Array.from(tierCounts.entries())
@@ -138,15 +132,8 @@ export async function GET() {
   } catch (error) {
     console.error('Dashboard charts error:', error);
     return NextResponse.json(
-      {
-        ok: true,
-        data: {
-          mrrSeries: [],
-          signupsSeries: [],
-          tierDistribution: [],
-          requestsSeries: [],
-        },
-      },
+      { ok: false, error: 'Erro interno do servidor' },
+      { status: 500 },
     );
   }
 }

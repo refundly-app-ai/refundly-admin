@@ -6,6 +6,11 @@ import { logActivity } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session.adminId || !session.totpVerified) {
+      return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -14,25 +19,7 @@ export async function GET(request: NextRequest) {
     const banned = searchParams.get('banned');
     const neverLoggedIn = searchParams.get('neverLoggedIn');
 
-    const offset = (page - 1) * limit;
-
-    let query = supabaseAdmin
-      .from('user_org_roles')
-      .select(`
-        user_id,
-        role,
-        org_id,
-        profiles!inner(full_name, email, whatsapp_verified, banned),
-        organizations!inner(name, slug)
-      `, { count: 'exact' })
-      .range(offset, offset + limit - 1)
-      .order('user_id');
-
-    if (role) {
-      query = query.eq('role', role);
-    }
-
-    const { data, error, count } = await query;
+    const { data: rpcData, error } = await supabaseAdmin.rpc('superadmin_list_members');
 
     if (error) {
       console.error('Get members error:', error);
@@ -43,25 +30,31 @@ export async function GET(request: NextRequest) {
       user_id: string;
       role: string;
       org_id: string;
-      profiles: unknown;
-      organizations: unknown;
+      is_active: boolean;
+      full_name: string | null;
+      email: string | null;
+      whatsapp_verified: boolean | null;
+      org_name: string | null;
+      org_slug: string | null;
     };
 
-    let items = (data ?? []).map((row: Row) => {
-      const profile = row.profiles as { full_name: string | null; email: string | null; whatsapp_verified: boolean | null; banned: boolean | null } | null;
-      const org = row.organizations as { name: string | null; slug: string | null } | null;
-      return {
-        id: row.user_id,
-        email: profile?.email,
-        fullName: profile?.full_name,
-        role: row.role,
-        orgId: row.org_id,
-        orgName: org?.name,
-        orgSlug: org?.slug,
-        banned: profile?.banned ?? false,
-        whatsappVerified: profile?.whatsapp_verified ?? false,
-      };
-    });
+    let items = (rpcData ?? [] as Row[]).map((row: Row) => ({
+      id: row.user_id,
+      email: row.email,
+      fullName: row.full_name,
+      role: row.role,
+      orgId: row.org_id,
+      orgName: row.org_name,
+      orgSlug: row.org_slug,
+      isActive: row.is_active,
+      whatsappVerified: row.whatsapp_verified ?? false,
+    }));
+
+    const offset = (page - 1) * limit;
+
+    if (role) {
+      items = items.filter((m) => m.role === role);
+    }
 
     if (search) {
       const s = search.toLowerCase();
@@ -70,12 +63,6 @@ export async function GET(request: NextRequest) {
           m.email?.toLowerCase().includes(s) ||
           m.fullName?.toLowerCase().includes(s)
       );
-    }
-
-    if (banned === 'true') {
-      items = items.filter((m) => m.banned);
-    } else if (banned === 'false') {
-      items = items.filter((m) => !m.banned);
     }
 
     if (neverLoggedIn === 'true') {
@@ -88,15 +75,18 @@ export async function GET(request: NextRequest) {
       items = items.filter((m) => neverLoggedSet.has(m.id));
     }
 
+    const total = items.length;
+    const paginated = items.slice(offset, offset + limit);
+
     return NextResponse.json({
       ok: true,
       data: {
-        items,
+        items: paginated,
         pagination: {
           page,
           limit,
-          total: count ?? items.length,
-          totalPages: Math.ceil((count ?? items.length) / limit),
+          total,
+          totalPages: Math.ceil(total / limit),
         },
       },
     });
@@ -110,7 +100,7 @@ const inviteMemberSchema = z.object({
   email: z.string().email('E-mail inválido'),
   fullName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   orgId: z.string().uuid('ID da organização inválido'),
-  role: z.enum(['owner', 'admin', 'member', 'viewer']).default('member'),
+  role: z.enum(['admin', 'colaborador', 'aprovador']).default('colaborador'),
 });
 
 export async function POST(request: NextRequest) {

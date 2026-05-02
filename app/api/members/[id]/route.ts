@@ -69,7 +69,7 @@ export async function GET(
 const patchMemberSchema = z.object({
   fullName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').optional(),
   email: z.string().email('E-mail inválido').optional(),
-  role: z.enum(['owner', 'admin', 'member', 'viewer']).optional(),
+  role: z.enum(['admin', 'colaborador', 'aprovador']).optional(),
   orgId: z.string().uuid().optional(),
 });
 

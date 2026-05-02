@@ -66,17 +66,15 @@ const statusLabels: Record<MemberStatus, string> = {
 };
 
 const roleColors: Record<MemberRole, string> = {
-  owner: 'bg-chart-3/20 text-chart-3 border-chart-3/30',
   admin: 'bg-chart-1/20 text-chart-1 border-chart-1/30',
-  member: 'bg-muted text-muted-foreground',
-  viewer: 'bg-muted text-muted-foreground',
+  colaborador: 'bg-muted text-muted-foreground',
+  aprovador: 'bg-chart-3/20 text-chart-3 border-chart-3/30',
 };
 
 const roleLabels: Record<MemberRole, string> = {
-  owner: 'Proprietário',
   admin: 'Admin',
-  member: 'Membro',
-  viewer: 'Visualizador',
+  colaborador: 'Colaborador',
+  aprovador: 'Aprovador',
 };
 
 interface InviteForm {
@@ -99,11 +97,12 @@ export default function MembersPage() {
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', fullName: '', orgId: '', role: 'member' });
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', fullName: '', orgId: '', role: 'colaborador' });
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
 
-  const [editForm, setEditForm] = useState<EditForm>({ fullName: '', email: '', role: 'member' });
+  const [editForm, setEditForm] = useState<EditForm>({ fullName: '', email: '', role: 'colaborador' });
+
   const [editError, setEditError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -123,8 +122,8 @@ export default function MembersPage() {
     organizationId: m.orgId as string | undefined,
     organizationName: m.orgName as string | undefined,
     role: m.role as MemberRole | undefined,
-    status: (m.banned ? 'suspended' : 'active') as MemberStatus,
-    banned: (m.banned as boolean) ?? false,
+    status: ((m.isActive as boolean) !== false ? 'active' : 'suspended') as MemberStatus,
+    banned: (m.isActive as boolean) === false,
     mfaEnabled: (m.whatsappVerified as boolean) ?? false,
     createdAt: new Date().toISOString(),
   }));
@@ -136,9 +135,9 @@ export default function MembersPage() {
 
   const stats = {
     total: membersData?.data?.pagination?.total ?? members.length,
-    active: members.filter((m) => !m.banned).length,
+    active: members.filter((m) => m.status === 'active').length,
     mfaEnabled: members.filter((m) => m.mfaEnabled).length,
-    admins: members.filter((m) => m.role === 'admin' || m.role === 'owner').length,
+    admins: members.filter((m) => m.role === 'admin').length,
   };
 
   async function handleInvite() {
@@ -170,7 +169,7 @@ export default function MembersPage() {
   }
 
   function openEditDialog(member: Member) {
-    setEditForm({ fullName: member.fullName ?? member.name ?? '', email: member.email, role: member.role ?? 'member' });
+    setEditForm({ fullName: member.fullName ?? member.name ?? '', email: member.email, role: member.role ?? 'colaborador' });
     setEditError(null);
     setSelectedMember(member);
     setEditDialogOpen(true);
@@ -297,7 +296,9 @@ export default function MembersPage() {
       key: 'mfa',
       header: 'WhatsApp',
       cell: (member: Member) =>
-        member.mfaEnabled ? (
+        member.role !== 'colaborador' ? (
+          <span className="text-muted-foreground">—</span>
+        ) : member.mfaEnabled ? (
           <Badge className="bg-success/20 text-success border-success/30">
             <Shield className="mr-1 h-3 w-3" />
             Verificado
@@ -369,10 +370,9 @@ export default function MembersPage() {
       key: 'role',
       label: 'Papel',
       options: [
-        { value: 'owner', label: 'Proprietário' },
         { value: 'admin', label: 'Admin' },
-        { value: 'member', label: 'Membro' },
-        { value: 'viewer', label: 'Visualizador' },
+        { value: 'colaborador', label: 'Colaborador' },
+        { value: 'aprovador', label: 'Aprovador' },
       ],
     },
     {
@@ -518,8 +518,8 @@ export default function MembersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="member">Membro</SelectItem>
-                  <SelectItem value="viewer">Visualizador</SelectItem>
+                  <SelectItem value="colaborador">Colaborador</SelectItem>
+                  <SelectItem value="aprovador">Aprovador</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -622,10 +622,9 @@ export default function MembersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="owner">Proprietário</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="member">Membro</SelectItem>
-                  <SelectItem value="viewer">Visualizador</SelectItem>
+                  <SelectItem value="colaborador">Colaborador</SelectItem>
+                  <SelectItem value="aprovador">Aprovador</SelectItem>
                 </SelectContent>
               </Select>
             </div>

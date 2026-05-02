@@ -1,7 +1,7 @@
 // Organization Types
 export type OrgStatus = 'active' | 'suspended' | 'blocked' | 'churned' | 'trial';
 export type OrganizationStatus = OrgStatus;
-export type Plan = 'free' | 'basic' | 'pro' | 'enterprise';
+export type Plan = 'free' | 'essential' | 'enterprise';
 export type OrganizationTier = Plan;
 
 export interface Organization {
@@ -31,7 +31,7 @@ export interface Organization {
 }
 
 // Member Types
-export type MemberRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type MemberRole = 'admin' | 'colaborador' | 'aprovador';
 export type MemberStatus = 'active' | 'invited' | 'suspended' | 'deactivated';
 
 export interface Member {
@@ -50,7 +50,7 @@ export interface Member {
   createdAt: string;
   mfaEnabled?: boolean;
   sessionsCount?: number;
-  orgs?: Array<{ orgId: string; orgName: string; role: MemberRole }>;
+  orgs?: Array<{ orgId: string; orgName: string; role: MemberRole | string }>;
   verifiedChannel?: string | null;
 }
 

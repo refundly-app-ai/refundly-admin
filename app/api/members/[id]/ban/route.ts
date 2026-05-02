@@ -35,7 +35,7 @@ export async function POST(
       return NextResponse.json({ ok: false, error: 'Membro não encontrado' }, { status: 404 });
     }
 
-    await supabaseAdmin.from('profiles').update({ banned: true }).eq('id', id);
+    await supabaseAdmin.from('user_org_roles').update({ is_active: false }).eq('user_id', id);
     await supabaseAdmin.auth.admin.updateUserById(id, { ban_duration: '87600h' }); // 10 years
 
     await logActivity({
@@ -75,7 +75,7 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: 'Membro não encontrado' }, { status: 404 });
     }
 
-    await supabaseAdmin.from('profiles').update({ banned: false }).eq('id', id);
+    await supabaseAdmin.from('user_org_roles').update({ is_active: true }).eq('user_id', id);
     await supabaseAdmin.auth.admin.updateUserById(id, { ban_duration: 'none' });
 
     await logActivity({

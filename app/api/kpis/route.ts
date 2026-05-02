@@ -19,17 +19,21 @@ export async function GET() {
         .limit(10),
     ]);
 
+    if (kpiResult.error) {
+      console.error('RPC superadmin_global_kpis error:', kpiResult.error);
+    }
+
     const kpi = Array.isArray(kpiResult.data) ? kpiResult.data[0] : kpiResult.data;
 
     const metrics: DashboardMetrics = {
-      totalOrganizations: kpi?.total_organizations ?? kpi?.totalOrganizations ?? 0,
-      totalMembers: kpi?.total_members ?? kpi?.totalMembers ?? 0,
-      totalMRR: kpi?.total_mrr ?? kpi?.totalMRR ?? 0,
-      activeTrials: kpi?.active_trials ?? kpi?.activeTrials ?? 0,
-      churnRate: kpi?.churn_rate ?? kpi?.churnRate ?? 0,
-      growthRate: kpi?.growth_rate ?? kpi?.growthRate ?? 0,
-      avgHealthScore: kpi?.avg_health_score ?? kpi?.avgHealthScore ?? 0,
-      avgComplianceScore: kpi?.avg_compliance_score ?? kpi?.avgComplianceScore ?? 0,
+      totalOrganizations: kpi?.total_organizations ?? 0,
+      totalMembers: kpi?.total_members ?? 0,
+      totalMRR: kpi?.total_mrr ?? 0,
+      activeTrials: kpi?.active_trials ?? 0,
+      churnRate: kpi?.churn_rate ?? 0,
+      growthRate: kpi?.growth_rate ?? 0,
+      avgHealthScore: kpi?.avg_health_score ?? 0,
+      avgComplianceScore: kpi?.avg_compliance_score ?? 0,
     };
 
     const recentLogs: AuditLog[] = (logsResult.data ?? []).map((l: any) => ({

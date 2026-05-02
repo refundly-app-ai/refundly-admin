@@ -106,10 +106,10 @@ export default function LoginPage() {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
           <Shield className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-semibold">Super Admin</CardTitle>
+        <CardTitle className="text-2xl font-semibold">Admin Panel</CardTitle>
         <CardDescription className="text-muted-foreground">
           {step === 'credentials'
-            ? 'Entre com suas credenciais para acessar o painel'
+            ? 'Insira suas credenciais abaixo'
             : 'Digite o código do seu aplicativo autenticador'}
         </CardDescription>
       </CardHeader>

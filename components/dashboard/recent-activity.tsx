@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   UserPlus,
   Building2,
@@ -77,7 +78,7 @@ export function RecentActivity({ logs }: RecentActivityProps) {
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true, locale: ptBR })}
                   </p>
                 </div>
               </div>

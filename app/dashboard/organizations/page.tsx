@@ -71,15 +71,13 @@ const statusLabels: Record<OrganizationStatus, string> = {
 
 const tierColors: Record<OrgTier, string> = {
   free: 'bg-muted text-muted-foreground',
-  basic: 'bg-chart-2/20 text-chart-2 border-chart-2/30',
-  pro: 'bg-chart-1/20 text-chart-1 border-chart-1/30',
+  essential: 'bg-chart-2/20 text-chart-2 border-chart-2/30',
   enterprise: 'bg-success/20 text-success border-success/30',
 };
 
 const tierLabels: Record<OrgTier, string> = {
   free: 'Gratuito',
-  basic: 'Básico',
-  pro: 'Pro',
+  essential: 'Essencial',
   enterprise: 'Enterprise',
 };
 
@@ -100,16 +98,27 @@ export default function OrganizationsPage() {
 
   const { data: orgsData, isLoading, mutate } = useSWR('/api/organizations?limit=100', fetcher);
 
-  const organizations: Organization[] = (orgsData?.data?.items ?? []).map((o: Record<string, unknown>) => ({
-    ...(o as unknown as Organization),
-    tier: (o.plan ?? o.tier) as OrgTier,
-    memberCount: (o.member_count as number) ?? (o.memberCount as number) ?? 0,
-    healthScore: (o.health_score as number) ?? (o.healthScore as number) ?? 0,
-    lastActiveAt: (o.last_active_at as string) ?? (o.lastActiveAt as string) ?? (o.created_at as string),
-    mrr: (o.mrr as number) ?? 0,
-    featureFlags: (o.feature_flags as string[]) ?? (o.featureFlags as string[]) ?? [],
-    complianceScore: (o.compliance_score as number) ?? (o.complianceScore as number) ?? 0,
-  }));
+  const organizations: Organization[] = (orgsData?.data?.items ?? []).map((o: Record<string, unknown>) => {
+    const isActive = o.is_active as boolean;
+    const billingStatus = o.billing_status as string;
+    const status: OrganizationStatus =
+      billingStatus === 'trial' ? 'trial' :
+      billingStatus === 'churned' ? 'churned' :
+      isActive ? 'active' : 'suspended';
+
+    return {
+      ...(o as unknown as Organization),
+      status,
+      tier: billingStatus as OrgTier,
+      plan: billingStatus as Plan,
+      memberCount: (o.member_count as number) ?? 0,
+      healthScore: (o.lifecycle_health_score as number) ?? 0,
+      lastActiveAt: (o.last_admin_login_at as string) ?? (o.created_at as string),
+      mrr: (o.mrr as number) ?? 0,
+      featureFlags: [],
+      complianceScore: 0,
+    };
+  });
 
   const stats = {
     total: orgsData?.data?.pagination?.total ?? organizations.length,
@@ -283,7 +292,6 @@ export default function OrganizationsPage() {
         { value: 'active', label: 'Ativo' },
         { value: 'suspended', label: 'Suspenso' },
         { value: 'churned', label: 'Cancelado' },
-        { value: 'trial', label: 'Trial' },
       ],
     },
     {
@@ -291,8 +299,8 @@ export default function OrganizationsPage() {
       label: 'Plano',
       options: [
         { value: 'free', label: 'Gratuito' },
-        { value: 'basic', label: 'Básico' },
-        { value: 'pro', label: 'Pro' },
+        { value: 'essential', label: 'Essencial' },
+        { value: 'enterprise', label: 'Enterprise' },
       ],
     },
   ];
@@ -426,8 +434,7 @@ export default function OrganizationsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Gratuito</SelectItem>
-                  <SelectItem value="basic">Básico</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="essential">Essencial</SelectItem>
                   <SelectItem value="enterprise">Enterprise</SelectItem>
                 </SelectContent>
               </Select>
