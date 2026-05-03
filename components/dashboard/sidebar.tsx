@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -13,12 +14,12 @@ import {
   Activity,
   FileText,
   Settings,
-  ChevronLeft,
-  ChevronRight,
-  Command,
   UserCog,
   User,
+  KeyRound,
+  LogOut,
 } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -35,11 +36,11 @@ interface NavItem {
   children?: NavItem[];
 }
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
   { title: 'Visão Geral', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Organizações', href: '/dashboard/organizations', icon: Building2 },
   { title: 'Membros', href: '/dashboard/members', icon: Users },
-  { title: 'Conformidade', href: '/dashboard/compliance', icon: Shield, badge: '3' },
+  { title: 'Conformidade', href: '/dashboard/compliance', icon: Shield },
   { title: 'Integrações', href: '/dashboard/integrations', icon: Plug },
   { title: 'Faturamento', href: '/dashboard/billing', icon: CreditCard },
   { title: 'Operações', href: '/dashboard/operations', icon: Activity },
@@ -49,19 +50,58 @@ const navItems: NavItem[] = [
     href: '/dashboard/settings',
     icon: Settings,
     children: [
-      { title: 'Admins', href: '/dashboard/settings/admins', icon: UserCog },
       { title: 'Perfil', href: '/dashboard/settings/profile', icon: User },
+      { title: 'Segurança', href: '/dashboard/settings/security', icon: KeyRound },
+      { title: 'Administradores', href: '/dashboard/settings/admins', icon: UserCog },
     ]
   },
 ];
 
-interface SidebarProps {
-  collapsed: boolean;
-  onToggle: () => void;
+interface AdminData {
+  fullName: string;
+  email: string;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+interface SidebarProps {
+  collapsed: boolean;
+}
+
+export function Sidebar({ collapsed }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [complianceCount, setComplianceCount] = useState<number | null>(null);
+  const [admin, setAdmin] = useState<AdminData | null>(null);
+
+  useEffect(() => {
+    fetch('/api/compliance')
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok) setComplianceCount(json.data.summary.totalIssues);
+      })
+      .catch(() => {});
+
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) setAdmin(result.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  }
+
+  const initials = admin?.fullName
+    ? admin.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
+  const navItems = baseNavItems.map((item) =>
+    item.href === '/dashboard/compliance' && complianceCount != null && complianceCount > 0
+      ? { ...item, badge: String(complianceCount) }
+      : item
+  );
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -74,11 +114,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Logo */}
         <div className="flex h-14 items-center border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground">
-              <Command className="h-4 w-4 text-background" />
-            </div>
             {!collapsed && (
-              <span className="font-semibold text-foreground">Admin</span>
+              <span className="font-semibold text-foreground">Painel Administrativo</span>
             )}
           </Link>
         </div>
@@ -87,9 +124,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto p-2">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || 
+              const isActive = pathname === item.href ||
                 (item.href !== '/dashboard' && pathname.startsWith(item.href));
-              
+
               const linkContent = (
                 <Link
                   href={item.href}
@@ -137,20 +174,45 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </ul>
         </nav>
 
-        {/* Collapse Toggle */}
+        {/* Footer */}
         <div className="border-t border-border p-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggle}
-            className="w-full justify-center"
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-full text-muted-foreground hover:text-destructive"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Sair</TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center gap-2 rounded-md px-2 py-2">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium text-foreground">
+                  {admin?.fullName ?? '...'}
+                </span>
+                <span className="text-xs text-muted-foreground">Admin</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </aside>
     </TooltipProvider>

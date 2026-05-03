@@ -202,7 +202,7 @@ export default function SettingsAdminsPage() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Administradores</h1>
+          <h2 className="text-2xl font-semibold">Administradores</h2>
           <p className="text-muted-foreground">Gerencie os administradores da plataforma</p>
         </div>
         <Dialog open={inviteDialog} onOpenChange={setInviteDialog}>

@@ -6,12 +6,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Bell,
+  PanelLeft,
   Search,
-  User,
-  LogOut,
-  Settings,
-  Shield,
-  Loader2,
   AlertTriangle,
   Info,
 } from 'lucide-react';
@@ -24,16 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from './theme-toggle';
-
-interface AdminData {
-  id: string;
-  email: string;
-  fullName: string;
-  totpEnabled: boolean;
-  lastLoginAt: string | null;
-}
 
 interface Notification {
   id: string;
@@ -47,22 +34,19 @@ interface Notification {
 
 interface TopbarProps {
   onOpenCommandPalette: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
-export function Topbar({ onOpenCommandPalette }: TopbarProps) {
+export function Topbar({
+  onOpenCommandPalette,
+  sidebarCollapsed,
+  onToggleSidebar,
+}: TopbarProps) {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminData | null>(null);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((result) => {
-        if (result.ok) setAdmin(result.data);
-      })
-      .catch(() => {});
-
     fetch('/api/notifications')
       .then((r) => r.json())
       .then((result) => {
@@ -70,20 +54,6 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
       })
       .catch(() => {});
   }, []);
-
-  async function handleLogout() {
-    setIsLoggingOut(true);
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-    } finally {
-      setIsLoggingOut(false);
-    }
-  }
-
-  const initials = admin?.fullName
-    ? admin.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-    : '?';
 
   const severityIcon = (severity: Notification['severity']) => {
     switch (severity) {
@@ -98,17 +68,28 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4">
-      <Button
-        variant="outline"
-        className="w-64 justify-start gap-2 text-muted-foreground"
-        onClick={onOpenCommandPalette}
-      >
-        <Search className="h-4 w-4" />
-        <span className="flex-1 text-left">Buscar...</span>
-        <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground sm:flex">
-          <span className="text-xs">⌘</span>K
-        </kbd>
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onToggleSidebar}
+          aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+        >
+          <PanelLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          className="w-64 justify-start gap-2 text-muted-foreground"
+          onClick={onOpenCommandPalette}
+        >
+          <Search className="h-4 w-4" />
+          <span className="flex-1 text-left">Buscar...</span>
+          <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground sm:flex">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </Button>
+      </div>
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
@@ -162,60 +143,6 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
                 </DropdownMenuItem>
               </>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 px-2">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden flex-col items-start md:flex">
-                {admin ? (
-                  <>
-                    <span className="text-sm font-medium">{admin.fullName}</span>
-                    <span className="text-xs text-muted-foreground">Painel Admin</span>
-                  </>
-                ) : (
-                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                )}
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="flex flex-col">
-              <span>{admin?.fullName ?? '...'}</span>
-              <span className="text-xs font-normal text-muted-foreground">{admin?.email ?? ''}</span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/profile')}>
-              <User className="mr-2 h-4 w-4" />
-              Perfil
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/admins')}>
-              <Shield className="mr-2 h-4 w-4" />
-              Administradores
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-              <Settings className="mr-2 h-4 w-4" />
-              Configurações
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <LogOut className="mr-2 h-4 w-4" />
-              )}
-              Sair
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

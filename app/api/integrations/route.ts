@@ -32,7 +32,7 @@ export async function GET() {
 
     const connected = integrations.filter((i: any) => i.status === 'connected').length;
     const degraded = integrations.filter((i: any) => i.status === 'degraded').length;
-    const disconnected = integrations.filter((i: any) => i.status === 'disconnected').length;
+    const disconnected = integrations.filter((i: any) => i.status !== 'connected' && i.status !== 'degraded').length;
 
     return NextResponse.json({
       ok: true,

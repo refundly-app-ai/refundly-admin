@@ -16,17 +16,18 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <Sidebar collapsed={sidebarCollapsed} />
       <div
         className={cn(
           'flex min-h-screen flex-col transition-all duration-300',
           sidebarCollapsed ? 'ml-16' : 'ml-64'
         )}
       >
-        <Topbar onOpenCommandPalette={() => setCommandPaletteOpen(true)} />
+        <Topbar
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
+        />
         <main className="flex-1 p-6">{children}</main>
       </div>
       <CommandPalette
