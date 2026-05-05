@@ -31,7 +31,7 @@ export async function GET() {
     const twelveMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const [orgsResult, eventsResult, requestsResult] = await Promise.all([
+    const [orgsResult, eventsResult, requestsResult, allOrgsResult] = await Promise.all([
       supabaseAdmin
         .from('organizations')
         .select('id, billing_status, is_active, created_at')
@@ -45,6 +45,10 @@ export async function GET() {
         .from('platform_audit_logs')
         .select('created_at')
         .gte('created_at', twentyFourHoursAgo.toISOString()),
+      supabaseAdmin
+        .from('organizations')
+        .select('billing_status, is_active')
+        .eq('is_active', true),
     ]);
 
     const orgs = orgsResult.data ?? [];
@@ -69,7 +73,8 @@ export async function GET() {
     const mrrFromEvents = new Map<string, number>();
     for (const e of events) {
       const k = monthKey(new Date(e.created_at));
-      const amount = (e.payload_json as any)?.payment?.value ?? 0;
+      const payload = e.payload_json as { payment?: { value?: number } } | null;
+      const amount = payload?.payment?.value ?? 0;
       mrrFromEvents.set(k, (mrrFromEvents.get(k) ?? 0) + amount);
     }
     const useEvents = events.length > 0;
@@ -88,13 +93,8 @@ export async function GET() {
 
     // Tier distribution
     const tierCounts = new Map<string, number>();
-    const { data: allOrgs } = await supabaseAdmin
-      .from('organizations')
-      .select('billing_status, is_active')
-      .eq('is_active', true);
-
-    for (const o of allOrgs ?? []) {
-      const plan = (o as any).billing_status || 'free';
+    for (const o of allOrgsResult.data ?? []) {
+      const plan = o.billing_status || 'free';
       tierCounts.set(plan, (tierCounts.get(plan) ?? 0) + 1);
     }
 
@@ -120,7 +120,7 @@ export async function GET() {
       hours.push({ date: hourLabel(d), value: requestsByHour.get(hourKey(d)) ?? 0 });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       data: {
         mrrSeries,
@@ -129,6 +129,8 @@ export async function GET() {
         requestsSeries: hours,
       },
     });
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    return response;
   } catch (error) {
     console.error('Dashboard charts error:', error);
     return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSession } from '@/lib/auth/session';
 
 function escapeCsv(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -14,8 +15,15 @@ function rowToCsv(values: unknown[]): string {
   return values.map(escapeCsv).join(',');
 }
 
+const EXPORT_LIMIT = 5000;
+
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session.adminId || !session.totpVerified) {
+      return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') ?? 'tenant';
     const org = searchParams.get('org');
@@ -31,7 +39,7 @@ export async function GET(request: NextRequest) {
         .from('audit_logs')
         .select('*, organizations(name), profiles(full_name, email)')
         .order('created_at', { ascending: false })
-        .limit(10000);
+        .limit(EXPORT_LIMIT);
 
       if (org) query = query.eq('org_id', org);
       if (actor) query = query.eq('actor_id', actor);
@@ -56,7 +64,7 @@ export async function GET(request: NextRequest) {
         .from('platform_audit_logs')
         .select('*, platform_admins(email, full_name)')
         .order('created_at', { ascending: false })
-        .limit(10000);
+        .limit(EXPORT_LIMIT);
 
       if (actor) query = query.eq('admin_id', actor);
       if (org) query = query.eq('org_id', org);

@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth/session';
 import { generateTOTPSecret } from '@/lib/auth/totp';
 import { generateRecoveryCodes } from '@/lib/auth/password';
 import { findAdminById } from '@/lib/db/admins';
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const session = await getSession();
 

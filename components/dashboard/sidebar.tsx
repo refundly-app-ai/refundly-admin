@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useAdminData } from '@/components/providers/admin-data-provider';
+import { useSidebar } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
   Building2,
@@ -18,6 +19,7 @@ import {
   User,
   KeyRound,
   LogOut,
+  ClipboardList,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,7 @@ const baseNavItems: NavItem[] = [
   { title: 'Faturamento', href: '/dashboard/billing', icon: CreditCard },
   { title: 'Operações', href: '/dashboard/operations', icon: Activity },
   { title: 'Logs de Auditoria', href: '/dashboard/audit', icon: FileText },
+  { title: 'Onboarding', href: '/dashboard/onboarding', icon: ClipboardList },
   {
     title: 'Configurações',
     href: '/dashboard/settings',
@@ -53,40 +56,18 @@ const baseNavItems: NavItem[] = [
       { title: 'Perfil', href: '/dashboard/settings/profile', icon: User },
       { title: 'Segurança', href: '/dashboard/settings/security', icon: KeyRound },
       { title: 'Administradores', href: '/dashboard/settings/admins', icon: UserCog },
-    ]
+    ],
   },
 ];
 
-interface AdminData {
-  fullName: string;
-  email: string;
-}
-
-interface SidebarProps {
-  collapsed: boolean;
-}
-
-export function Sidebar({ collapsed }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [complianceCount, setComplianceCount] = useState<number | null>(null);
-  const [admin, setAdmin] = useState<AdminData | null>(null);
+  const { admin, complianceCount } = useAdminData();
+  const { open: collapsed, toggleSidebar } = useSidebar();
 
-  useEffect(() => {
-    fetch('/api/compliance')
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.ok) setComplianceCount(json.data.summary.totalIssues);
-      })
-      .catch(() => {});
-
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((result) => {
-        if (result.ok) setAdmin(result.data);
-      })
-      .catch(() => {});
-  }, []);
+  // useSidebar().open = true means expanded; we invert for local "collapsed" semantics
+  const isCollapsed = !collapsed;
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -108,13 +89,13 @@ export function Sidebar({ collapsed }: SidebarProps) {
       <aside
         className={cn(
           'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300',
-          collapsed ? 'w-16' : 'w-64'
+          isCollapsed ? 'w-16' : 'w-64'
         )}
       >
         {/* Logo */}
         <div className="flex h-14 items-center border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            {!collapsed && (
+            {!isCollapsed && (
               <span className="font-semibold text-foreground">Painel Administrativo</span>
             )}
           </Link>
@@ -124,7 +105,8 @@ export function Sidebar({ collapsed }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto p-2">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href ||
+              const isActive =
+                pathname === item.href ||
                 (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
               const linkContent = (
@@ -138,7 +120,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && (
+                  {!isCollapsed && (
                     <>
                       <span className="flex-1">{item.title}</span>
                       {item.badge && (
@@ -151,7 +133,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 </Link>
               );
 
-              if (collapsed) {
+              if (isCollapsed) {
                 return (
                   <li key={item.href}>
                     <Tooltip>
@@ -176,7 +158,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
 
         {/* Footer */}
         <div className="border-t border-border p-2">
-          {collapsed ? (
+          {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

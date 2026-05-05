@@ -12,19 +12,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20));
     const search = searchParams.get('search') || '';
-    const role = searchParams.get('role');
-    const banned = searchParams.get('banned');
+    const role = searchParams.get('role') || '';
     const neverLoggedIn = searchParams.get('neverLoggedIn');
 
-    const { data: rpcData, error } = await supabaseAdmin.rpc('superadmin_list_members');
-
-    if (error) {
-      console.error('Get members error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
+    const offset = (page - 1) * limit;
 
     type Row = {
       user_id: string;
@@ -36,9 +30,82 @@ export async function GET(request: NextRequest) {
       whatsapp_verified: boolean | null;
       org_name: string | null;
       org_slug: string | null;
+      total_count: number;
     };
 
-    let items = (rpcData ?? [] as Row[]).map((row: Row) => ({
+    if (neverLoggedIn === 'true') {
+      // neverLoggedIn filter requires cross-referencing Supabase Auth — handled in JS
+      const { data: rpcData, error } = await supabaseAdmin.rpc('superadmin_list_members', {
+        p_limit: 10000,
+        p_offset: 0,
+        p_search: search || null,
+        p_role: role || null,
+      });
+
+      if (error) {
+        console.error('Get members error:', error);
+        return NextResponse.json({ ok: false, error: 'Erro ao buscar membros' }, { status: 500 });
+      }
+
+      const pageSize = 500;
+      let authUserPage = 1;
+      const neverLoggedSet = new Set<string>();
+      let hasMore = true;
+      while (hasMore) {
+        const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ page: authUserPage, perPage: pageSize });
+        const users = authUsers?.users ?? [];
+        for (const u of users) {
+          if (!u.last_sign_in_at) neverLoggedSet.add(u.id);
+        }
+        hasMore = users.length === pageSize;
+        authUserPage++;
+      }
+
+      const allItems = ((rpcData ?? []) as Row[])
+        .filter((row) => neverLoggedSet.has(row.user_id))
+        .map((row) => ({
+          id: row.user_id,
+          email: row.email,
+          fullName: row.full_name,
+          role: row.role,
+          orgId: row.org_id,
+          orgName: row.org_name,
+          orgSlug: row.org_slug,
+          isActive: row.is_active,
+          whatsappVerified: row.whatsapp_verified ?? false,
+        }));
+
+      const total = allItems.length;
+      const paginated = allItems.slice(offset, offset + limit);
+
+      const res = NextResponse.json({
+        ok: true,
+        data: {
+          items: paginated,
+          pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        },
+      });
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
+
+    // Default path: all filtering and pagination done in the database
+    const { data: rpcData, error } = await supabaseAdmin.rpc('superadmin_list_members', {
+      p_limit: limit,
+      p_offset: offset,
+      p_search: search || null,
+      p_role: role || null,
+    });
+
+    if (error) {
+      console.error('Get members error:', error);
+      return NextResponse.json({ ok: false, error: 'Erro ao buscar membros' }, { status: 500 });
+    }
+
+    const rows = (rpcData ?? []) as Row[];
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+    const items = rows.map((row) => ({
       id: row.user_id,
       email: row.email,
       fullName: row.full_name,
@@ -50,46 +117,15 @@ export async function GET(request: NextRequest) {
       whatsappVerified: row.whatsapp_verified ?? false,
     }));
 
-    const offset = (page - 1) * limit;
-
-    if (role) {
-      items = items.filter((m) => m.role === role);
-    }
-
-    if (search) {
-      const s = search.toLowerCase();
-      items = items.filter(
-        (m) =>
-          m.email?.toLowerCase().includes(s) ||
-          m.fullName?.toLowerCase().includes(s)
-      );
-    }
-
-    if (neverLoggedIn === 'true') {
-      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-      const neverLoggedSet = new Set(
-        (authUsers?.users ?? [])
-          .filter((u) => !u.last_sign_in_at)
-          .map((u) => u.id)
-      );
-      items = items.filter((m) => neverLoggedSet.has(m.id));
-    }
-
-    const total = items.length;
-    const paginated = items.slice(offset, offset + limit);
-
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
-        items: paginated,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+        items,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       },
     });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   } catch (error) {
     console.error('Get members error:', error);
     return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
@@ -141,7 +177,7 @@ export async function POST(request: NextRequest) {
       if (createError || !newUser?.user) {
         console.error('Create user error:', createError);
         return NextResponse.json(
-          { ok: false, error: createError?.message ?? 'Erro ao criar usuário' },
+          { ok: false, error: 'Erro ao criar usuário' },
           { status: 500 }
         );
       }
@@ -163,7 +199,7 @@ export async function POST(request: NextRequest) {
 
     if (roleError) {
       console.error('Assign role error:', roleError);
-      return NextResponse.json({ ok: false, error: roleError.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao atribuir função ao membro' }, { status: 500 });
     }
 
     await logActivity({

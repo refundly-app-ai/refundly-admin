@@ -6,6 +6,11 @@ import { logActivity } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session.adminId || !session.totpVerified) {
+      return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -35,28 +40,29 @@ export async function GET(request: NextRequest) {
       query = query.eq('billing_status', plan);
     }
 
-    const [{ data, error, count }, statsResult] = await Promise.all([
-      query,
-      supabaseAdmin.rpc('superadmin_org_stats'),
-    ]);
+    const { data, error, count } = await query;
 
     if (error) {
       console.error('Get organizations error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao buscar organizações' }, { status: 500 });
     }
 
+    const [{ data: statsData }] = await Promise.all([
+      supabaseAdmin.rpc('superadmin_org_stats'),
+    ]);
+
     const statsMap = new Map<string, { member_count: number; mrr: number }>();
-    for (const s of statsResult.data ?? []) {
+    for (const s of statsData ?? []) {
       statsMap.set(s.org_id, { member_count: Number(s.member_count), mrr: Number(s.mrr) });
     }
 
-    const items = (data ?? []).map((org: any) => ({
+    const items = (data ?? []).map((org) => ({
       ...org,
       member_count: statsMap.get(org.id)?.member_count ?? 0,
       mrr: statsMap.get(org.id)?.mrr ?? 0,
     }));
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         items,
@@ -68,6 +74,8 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   } catch (error) {
     console.error('Get organizations error:', error);
     return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
@@ -117,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Create org error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao criar organização' }, { status: 500 });
     }
 
     await logActivity({

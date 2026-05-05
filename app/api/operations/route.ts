@@ -13,12 +13,14 @@ export async function GET() {
 
     if (error) {
       console.error('Get operations error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao buscar dados de operações' }, { status: 500 });
     }
 
     const wh = data?.webhook_health ?? {};
-    const funnel = (data?.lifecycle_funnel ?? []).map((item: any, index: number, arr: any[]) => {
-      const base = arr[0]?.count ?? 1;
+    type FunnelItem = { stage: string; count: number | string };
+    const funnelData = (data?.lifecycle_funnel ?? []) as FunnelItem[];
+    const funnel = funnelData.map((item, _index, arr) => {
+      const base = Number(arr[0]?.count ?? 1);
       return {
         stage: item.stage,
         count: Number(item.count ?? 0),
@@ -26,7 +28,7 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       data: {
         scheduledJobs: [],
@@ -39,15 +41,10 @@ export async function GET() {
         lifecycleFunnel: funnel,
       },
     });
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    return response;
   } catch (error) {
     console.error('Get operations error:', error);
-    return NextResponse.json({
-      ok: true,
-      data: {
-        scheduledJobs: [],
-        webhookHealth: { successRate: 100, totalDeliveries24h: 0, failedDeliveries24h: 0, retryDepthHistogram: [] },
-        lifecycleFunnel: [],
-      },
-    });
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

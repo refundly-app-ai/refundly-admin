@@ -95,9 +95,9 @@ async function probeSMTP(): Promise<ServiceHealth> {
     const port = parseInt(process.env.SMTP_PORT || '465');
     if (!host) return result('SMTP (Email)', 'down', 0, 0);
 
+    const net = await import('net');
     await new Promise<void>((resolve, reject) => {
-      const net = require('net');
-      const socket = net.createConnection({ host, port, timeout: 5000 });
+      const socket = net.createConnection({ host, port: port, timeout: 5000 });
       socket.once('connect', () => { socket.destroy(); resolve(); });
       socket.once('timeout', () => { socket.destroy(); reject(new Error('timeout')); });
       socket.once('error', reject);
@@ -125,8 +125,9 @@ async function probeWhatsApp(): Promise<ServiceHealth> {
     const ms = Date.now() - start;
     if (!res.ok) return result('WhatsApp', 'down', ms, 0);
 
-    const json = await res.json();
-    const instances: any[] = Array.isArray(json) ? json : [];
+    type InstanceEntry = { instance?: { state?: string }; connectionStatus?: string };
+    const json: unknown = await res.json();
+    const instances: InstanceEntry[] = Array.isArray(json) ? (json as InstanceEntry[]) : [];
 
     if (instances.length === 0) return result('WhatsApp', 'degraded', ms);
 
@@ -160,7 +161,7 @@ async function probeWebhooks(): Promise<ServiceHealth> {
     if (!data || data.length === 0) return result('Webhooks', 'degraded', ms);
 
     const total = data.length;
-    const failed = data.filter((w: any) => w.status === 'failed' || w.status === 'error').length;
+    const failed = data.filter((w) => w.status === 'failed' || w.status === 'error').length;
     const failRate = failed / total;
 
     const status =

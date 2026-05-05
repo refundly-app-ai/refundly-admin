@@ -71,7 +71,8 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error('Update profile error:', error);
+      return NextResponse.json({ ok: false, error: 'Erro ao atualizar perfil' }, { status: 500 });
     }
 
     const ip = request.headers.get('x-forwarded-for') || 'unknown';

@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
     const type = searchParams.get('type'); // 'platform' or 'tenant'
     const actor = searchParams.get('actor');
     const org = searchParams.get('org');
@@ -22,23 +22,39 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     if (type === 'tenant') {
-      const { data, error, count } = await supabaseAdmin
-        .from('audit_logs')
-        .select('id, org_id, actor_user_id, action, entity, entity_id, metadata, ip_address, user_agent, created_at, organizations(name, slug), profiles!audit_logs_actor_user_id_fkey(full_name, email)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const search = searchParams.get('search') || '';
+      const actionParam = searchParams.get('action') || '';
+
+      const { data, error } = await supabaseAdmin.rpc('superadmin_tenant_audit_logs', {
+        p_limit: 500,
+        p_offset: 0,
+      });
 
       if (error) {
         console.error('Get tenant audit error:', error);
-        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: false, error: 'Erro ao buscar logs de auditoria' }, { status: 500 });
       }
 
-      const items = (data ?? []).map((l: any) => ({
+      type TenantAuditRow = {
+        id: string;
+        org_id: string;
+        org_name: string | null;
+        actor_user_id: string | null;
+        actor_name: string | null;
+        actor_email: string | null;
+        action: string;
+        entity: string | null;
+        entity_id: string | null;
+        metadata: Record<string, unknown> | null;
+        ip_address: string | null;
+        created_at: string;
+      };
+      let mapped = ((data ?? []) as TenantAuditRow[]).map((l) => ({
         id: l.id,
         orgId: l.org_id,
-        orgName: l.organizations?.name,
+        orgName: l.org_name,
         actorId: l.actor_user_id,
-        actorName: l.profiles?.full_name || l.profiles?.email || 'Usuário',
+        actorName: l.actor_name || l.actor_email || 'Usuário',
         action: l.action,
         entity: l.entity,
         entityId: l.entity_id,
@@ -47,13 +63,31 @@ export async function GET(request: NextRequest) {
         createdAt: l.created_at,
       }));
 
-      return NextResponse.json({
+      if (search) {
+        const s = search.toLowerCase();
+        mapped = mapped.filter(
+          (l) =>
+            l.actorName.toLowerCase().includes(s) ||
+            (l.orgName?.toLowerCase().includes(s) ?? false) ||
+            l.action.toLowerCase().includes(s)
+        );
+      }
+      if (actionParam) {
+        mapped = mapped.filter((l) => l.action.startsWith(actionParam));
+      }
+
+      const total = mapped.length;
+      const items = mapped.slice(offset, offset + limit);
+
+      const res = NextResponse.json({
         ok: true,
         data: {
           items,
-          pagination: { page, limit, total: count ?? 0, totalPages: Math.ceil((count ?? 0) / limit) },
+          pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         },
       });
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
     }
 
     // Platform audit logs (default)
@@ -69,10 +103,24 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Get audit error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao buscar logs de auditoria' }, { status: 500 });
     }
 
-    const items = (data?.items ?? []).map((l: any) => ({
+    type PlatformAuditRow = {
+      id: string;
+      admin_id: string | null;
+      admin_email: string | null;
+      admin_name: string | null;
+      action: string;
+      entity: string | null;
+      entity_id: string | null;
+      org_id: string | null;
+      org_name: string | null;
+      metadata: Record<string, unknown> | null;
+      ip: string | null;
+      created_at: string;
+    };
+    const items = ((data?.items ?? []) as PlatformAuditRow[]).map((l) => ({
       id: l.id,
       adminId: l.admin_id,
       adminEmail: l.admin_email,
@@ -87,7 +135,7 @@ export async function GET(request: NextRequest) {
       createdAt: l.created_at,
     }));
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         items,
@@ -99,6 +147,8 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   } catch (error) {
     console.error('Get audit error:', error);
     return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });

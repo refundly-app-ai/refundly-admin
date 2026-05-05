@@ -16,7 +16,8 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const integrations = (data?.integrations ?? []).map((row: any) => ({
+    type IntegrationRow = { id: string; org_id: string; org_name: string | null; org_slug: string | null; instance_id: string; name: string; phone_number: string | null; status: string; is_active: boolean; connected_at: string | null; provider: string | null };
+    const integrations = ((data?.integrations ?? []) as IntegrationRow[]).map((row) => ({
       id: row.id,
       orgId: row.org_id,
       orgName: row.org_name ?? 'Desconhecido',
@@ -30,9 +31,9 @@ export async function GET() {
       provider: row.provider,
     }));
 
-    const connected = integrations.filter((i: any) => i.status === 'connected').length;
-    const degraded = integrations.filter((i: any) => i.status === 'degraded').length;
-    const disconnected = integrations.filter((i: any) => i.status !== 'connected' && i.status !== 'degraded').length;
+    const connected = integrations.filter((i) => i.status === 'connected').length;
+    const degraded = integrations.filter((i) => i.status === 'degraded').length;
+    const disconnected = integrations.filter((i) => i.status !== 'connected' && i.status !== 'degraded').length;
 
     return NextResponse.json({
       ok: true,

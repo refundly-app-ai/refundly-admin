@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR from 'swr';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,23 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { DataTable } from '@/components/dashboard/data-table';
 import type { Member, MemberRole, MemberStatus } from '@/lib/types';
 import {
@@ -41,15 +25,15 @@ import {
   Trash2,
   Ban,
   CheckCircle,
-  Users,
   Shield,
   Key,
   UserCog,
   Loader2,
-  ExternalLink,
 } from 'lucide-react';
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { MembersStatsCards } from './_components/members-stats-cards';
+import { InviteMemberModal } from './_components/invite-member-modal';
+import { MemberDetailModal } from './_components/member-detail-modal';
+import { ImpersonateModal } from './_components/impersonate-modal';
 
 const statusColors: Record<MemberStatus, string> = {
   active: 'bg-success/20 text-success border-success/30',
@@ -102,7 +86,6 @@ export default function MembersPage() {
   const [isInviting, setIsInviting] = useState(false);
 
   const [editForm, setEditForm] = useState<EditForm>({ fullName: '', email: '', role: 'colaborador' });
-
   const [editError, setEditError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -111,8 +94,17 @@ export default function MembersPage() {
   const [impersonateLink, setImpersonateLink] = useState<string | null>(null);
   const [isImpersonating, setIsImpersonating] = useState(false);
 
-  const { data: membersData, isLoading: membersLoading, mutate } = useSWR('/api/members?limit=100', fetcher);
-  const { data: orgsData } = useSWR('/api/organizations?limit=100', fetcher);
+  const queryClient = useQueryClient();
+  const { data: membersData, isLoading: membersLoading } = useQuery({
+    queryKey: ['members'],
+    queryFn: () => fetch('/api/members?limit=100').then((r) => r.json()),
+  });
+  const { data: orgsData } = useQuery({
+    queryKey: ['organizations-list'],
+    queryFn: () => fetch('/api/organizations?limit=100').then((r) => r.json()),
+  });
+
+  function mutate() { queryClient.invalidateQueries({ queryKey: ['members'] }); }
 
   const members: Member[] = (membersData?.data?.items ?? []).map((m: Record<string, unknown>): Member => ({
     id: m.id as string,
@@ -145,7 +137,6 @@ export default function MembersPage() {
     if (!inviteForm.email) { setInviteError('E-mail é obrigatório'); return; }
     if (!inviteForm.fullName) { setInviteError('Nome é obrigatório'); return; }
     if (!inviteForm.orgId) { setInviteError('Selecione uma organização'); return; }
-
     setIsInviting(true);
     try {
       const res = await fetch('/api/members', {
@@ -156,7 +147,7 @@ export default function MembersPage() {
       const result = await res.json();
       if (result.ok) {
         setInviteDialogOpen(false);
-        setInviteForm({ email: '', fullName: '', orgId: '', role: 'member' });
+        setInviteForm({ email: '', fullName: '', orgId: '', role: 'colaborador' });
         mutate();
       } else {
         setInviteError(result.error ?? 'Erro ao convidar membro');
@@ -178,38 +169,21 @@ export default function MembersPage() {
   async function handleEdit() {
     if (!selectedMember) return;
     setEditError(null);
-
     setIsEditing(true);
     try {
       const body: Record<string, unknown> = {};
-      if (editForm.fullName && editForm.fullName !== (selectedMember.fullName ?? selectedMember.name)) {
-        body.fullName = editForm.fullName;
-      }
-      if (editForm.email && editForm.email !== selectedMember.email) {
-        body.email = editForm.email;
-      }
-      if (editForm.role && editForm.role !== selectedMember.role) {
-        body.role = editForm.role;
-        body.orgId = selectedMember.organizationId;
-      }
-
-      if (Object.keys(body).length === 0) {
-        setEditDialogOpen(false);
-        return;
-      }
-
+      if (editForm.fullName && editForm.fullName !== (selectedMember.fullName ?? selectedMember.name)) body.fullName = editForm.fullName;
+      if (editForm.email && editForm.email !== selectedMember.email) body.email = editForm.email;
+      if (editForm.role && editForm.role !== selectedMember.role) { body.role = editForm.role; body.orgId = selectedMember.organizationId; }
+      if (Object.keys(body).length === 0) { setEditDialogOpen(false); return; }
       const res = await fetch(`/api/members/${selectedMember.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const result = await res.json();
-      if (result.ok) {
-        setEditDialogOpen(false);
-        mutate();
-      } else {
-        setEditError(result.error ?? 'Erro ao editar membro');
-      }
+      if (result.ok) { setEditDialogOpen(false); mutate(); }
+      else { setEditError(result.error ?? 'Erro ao editar membro'); }
     } catch {
       setEditError('Erro de conexão. Tente novamente.');
     } finally {
@@ -228,7 +202,6 @@ export default function MembersPage() {
   async function handleImpersonate() {
     if (!selectedMember) return;
     setImpersonateError(null);
-
     setIsImpersonating(true);
     try {
       const res = await fetch(`/api/members/${selectedMember.id}/impersonate`, {
@@ -237,11 +210,8 @@ export default function MembersPage() {
         body: JSON.stringify({ reason: impersonateReason }),
       });
       const result = await res.json();
-      if (result.ok) {
-        setImpersonateLink(result.data.link);
-      } else {
-        setImpersonateError(result.error ?? 'Erro ao iniciar personificação');
-      }
+      if (result.ok) { setImpersonateLink(result.data.link); }
+      else { setImpersonateError(result.error ?? 'Erro ao iniciar personificação'); }
     } catch {
       setImpersonateError('Erro de conexão. Tente novamente.');
     } finally {
@@ -270,9 +240,7 @@ export default function MembersPage() {
     {
       key: 'organization',
       header: 'Organização',
-      cell: (member: Member) => (
-        <span className="text-muted-foreground">{member.organizationName ?? '—'}</span>
-      ),
+      cell: (member: Member) => <span className="text-muted-foreground">{member.organizationName ?? '—'}</span>,
     },
     {
       key: 'role',
@@ -304,9 +272,7 @@ export default function MembersPage() {
             Verificado
           </Badge>
         ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Não verificado
-          </Badge>
+          <Badge variant="outline" className="text-muted-foreground">Não verificado</Badge>
         ),
     },
     {
@@ -322,12 +288,7 @@ export default function MembersPage() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedMember(member);
-                setDetailsDialogOpen(true);
-              }}
-            >
+            <DropdownMenuItem onClick={() => { setSelectedMember(member); setDetailsDialogOpen(true); }}>
               <Eye className="mr-2 h-4 w-4" />
               Ver Detalhes
             </DropdownMenuItem>
@@ -390,9 +351,7 @@ export default function MembersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Membros</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie todos os membros da plataforma
-          </p>
+          <p className="text-sm text-muted-foreground">Gerencie todos os membros da plataforma</p>
         </div>
         <Button onClick={() => { setInviteError(null); setInviteDialogOpen(true); }}>
           <UserPlus className="mr-2 h-4 w-4" />
@@ -400,54 +359,23 @@ export default function MembersPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total de Membros
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {membersLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.total}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Ativos</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.active}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">WhatsApp Verificado</CardTitle>
-            <Shield className="h-4 w-4 text-chart-1" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.mfaEnabled}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
-            <Key className="h-4 w-4 text-chart-3" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{membersLoading ? '—' : stats.admins}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <MembersStatsCards stats={stats} isLoading={membersLoading} />
 
       <Card className="bg-card border-border">
         <CardContent className="pt-6">
           {membersLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-2 py-3 border-b border-border last:border-0">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                </div>
+              ))}
             </div>
           ) : (
             <DataTable
@@ -461,254 +389,45 @@ export default function MembersPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog: Convidar Membro */}
-      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convidar Membro</DialogTitle>
-            <DialogDescription>
-              Adicione um novo membro a uma organização.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
-            <div className="grid gap-2">
-              <Label htmlFor="invite-email">E-mail</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="nome@empresa.com"
-                value={inviteForm.email}
-                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-name">Nome Completo</Label>
-              <Input
-                id="invite-name"
-                placeholder="Nome do membro"
-                value={inviteForm.fullName}
-                onChange={(e) => setInviteForm((f) => ({ ...f, fullName: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-org">Organização</Label>
-              <Select
-                value={inviteForm.orgId}
-                onValueChange={(v) => setInviteForm((f) => ({ ...f, orgId: v }))}
-              >
-                <SelectTrigger id="invite-org">
-                  <SelectValue placeholder="Selecione a organização" />
-                </SelectTrigger>
-                <SelectContent>
-                  {orgList.map((org) => (
-                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-role">Papel</Label>
-              <Select
-                value={inviteForm.role}
-                onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v as MemberRole }))}
-              >
-                <SelectTrigger id="invite-role">
-                  <SelectValue placeholder="Selecione o papel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="colaborador">Colaborador</SelectItem>
-                  <SelectItem value="aprovador">Aprovador</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteDialogOpen(false)} disabled={isInviting}>
-              Cancelar
-            </Button>
-            <Button onClick={handleInvite} disabled={isInviting}>
-              {isInviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enviar Convite
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InviteMemberModal
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
+        form={inviteForm}
+        onFormChange={setInviteForm}
+        onSubmit={handleInvite}
+        isSubmitting={isInviting}
+        error={inviteError}
+        orgList={orgList}
+      />
 
-      {/* Dialog: Detalhes do Membro */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedMember?.name}</DialogTitle>
-            <DialogDescription>{selectedMember?.email}</DialogDescription>
-          </DialogHeader>
-          {selectedMember && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  {selectedMember.status && (
-                    <Badge className={statusColors[selectedMember.status as MemberStatus]}>
-                      {statusLabels[selectedMember.status as MemberStatus]}
-                    </Badge>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Papel</p>
-                  {selectedMember.role && (
-                    <Badge className={roleColors[selectedMember.role as MemberRole]}>
-                      {roleLabels[selectedMember.role as MemberRole]}
-                    </Badge>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Organização</p>
-                  <p className="font-medium">{selectedMember.organizationName ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">WhatsApp</p>
-                  <p className="font-medium">
-                    {selectedMember.mfaEnabled ? 'Verificado' : 'Não verificado'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Fechar
-            </Button>
-            <Button onClick={() => { setDetailsDialogOpen(false); if (selectedMember) openEditDialog(selectedMember); }}>
-              Editar Membro
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MemberDetailModal
+        member={selectedMember}
+        detailsOpen={detailsDialogOpen}
+        onDetailsOpenChange={setDetailsDialogOpen}
+        editOpen={editDialogOpen}
+        onEditOpenChange={setEditDialogOpen}
+        editForm={editForm}
+        onEditFormChange={setEditForm}
+        onEditSubmit={handleEdit}
+        isEditing={isEditing}
+        editError={editError}
+        onOpenEdit={openEditDialog}
+      />
 
-      {/* Dialog: Editar Membro */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Membro</DialogTitle>
-            <DialogDescription>{selectedMember?.email}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {editError && <p className="text-sm text-destructive">{editError}</p>}
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Nome Completo</Label>
-              <Input
-                id="edit-name"
-                value={editForm.fullName}
-                onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-email">E-mail</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-role">Papel na Organização</Label>
-              <Select
-                value={editForm.role}
-                onValueChange={(v) => setEditForm((f) => ({ ...f, role: v as MemberRole }))}
-              >
-                <SelectTrigger id="edit-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="colaborador">Colaborador</SelectItem>
-                  <SelectItem value="aprovador">Aprovador</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isEditing}>
-              Cancelar
-            </Button>
-            <Button onClick={handleEdit} disabled={isEditing}>
-              {isEditing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Personificar */}
-      <Dialog open={impersonateDialogOpen} onOpenChange={(open) => {
-        setImpersonateDialogOpen(open);
-        if (!open) { setImpersonateLink(null); setImpersonateReason(''); setImpersonateError(null); }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Personificar Usuário</DialogTitle>
-            <DialogDescription>
-              Você está prestes a personificar {selectedMember?.name}. Esta ação será registrada.
-            </DialogDescription>
-          </DialogHeader>
-
-          {impersonateLink ? (
-            <div className="grid gap-4 py-4">
-              <div className="rounded-lg border border-success/50 bg-success/10 p-3">
-                <p className="text-sm text-success font-medium mb-2">Link gerado com sucesso</p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Este link expira em 1 hora e concede acesso como o usuário. Abra em uma janela anônima.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => window.open(impersonateLink, '_blank')}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Abrir como {selectedMember?.name}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-4 py-4">
-              {impersonateError && <p className="text-sm text-destructive">{impersonateError}</p>}
-              <div className="grid gap-2">
-                <Label htmlFor="impersonate-reason">Motivo da personificação</Label>
-                <Input
-                  id="impersonate-reason"
-                  placeholder="Ticket de suporte #1234"
-                  value={impersonateReason}
-                  onChange={(e) => setImpersonateReason(e.target.value)}
-                />
-              </div>
-              <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
-                <p className="text-sm text-warning">
-                  Sessões de personificação são registradas e auditadas. Use este recurso apenas para fins legítimos de suporte.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImpersonateDialogOpen(false)}>
-              {impersonateLink ? 'Fechar' : 'Cancelar'}
-            </Button>
-            {!impersonateLink && (
-              <Button
-                className="bg-warning text-warning-foreground hover:bg-warning/90"
-                onClick={handleImpersonate}
-                disabled={!impersonateReason.trim() || isImpersonating}
-              >
-                {isImpersonating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Iniciar Personificação
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImpersonateModal
+        member={selectedMember}
+        open={impersonateDialogOpen}
+        onOpenChange={(open) => {
+          setImpersonateDialogOpen(open);
+          if (!open) { setImpersonateLink(null); setImpersonateError(null); }
+        }}
+        reason={impersonateReason}
+        onReasonChange={setImpersonateReason}
+        onSubmit={handleImpersonate}
+        isSubmitting={isImpersonating}
+        error={impersonateError}
+        link={impersonateLink}
+      />
     </div>
   );
 }

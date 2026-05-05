@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSession } from '@/lib/auth/session';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session.adminId || !session.totpVerified) {
+      return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     const { data: healthData, error } = await supabaseAdmin.rpc('superadmin_org_health', { p_org_id: id });

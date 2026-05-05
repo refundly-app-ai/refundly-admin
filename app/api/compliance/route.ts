@@ -13,10 +13,11 @@ export async function GET() {
 
     if (error) {
       console.error('Get compliance error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao buscar dados de conformidade' }, { status: 500 });
     }
 
-    const violations = (data?.violations ?? []).map((v: any) => ({
+    type ViolationRow = { id: string; org_id: string; org_name: string; matched_field: string; matched_term: string; resolution: string | null; resolved_at: string | null; created_at: string };
+    const violations = ((data?.violations ?? []) as ViolationRow[]).map((v) => ({
       id: v.id,
       type: 'policy_violation',
       severity: v.resolved_at ? 'info' : 'warning',
@@ -27,7 +28,8 @@ export async function GET() {
       createdAt: v.created_at,
     }));
 
-    const duplicates = (data?.duplicates ?? []).map((f: any) => ({
+    type DuplicateRow = { id: string; org_id: string; org_name: string; fingerprint: string; expense_id: string; created_at: string };
+    const duplicates = ((data?.duplicates ?? []) as DuplicateRow[]).map((f) => ({
       id: f.id,
       type: 'receipt_duplicate',
       severity: 'warning' as const,
@@ -38,7 +40,8 @@ export async function GET() {
       createdAt: f.created_at,
     }));
 
-    const divergentReceipts = (data?.divergent_receipts ?? []).map((f: any) => {
+    type DivergentRow = { id: string; org_id: string; org_name: string; expense_id: string; field: string | null; discrepancies: string[] | string | null; ocr_amount: number | null; ocr_date: string | null; ocr_vendor: string | null; expense_amount: number | null; expense_date: string | null; vendor_name: string | null; created_at: string };
+    const divergentReceipts = ((data?.divergent_receipts ?? []) as DivergentRow[]).map((f) => {
       let discrepancies: string[] = [];
       try {
         discrepancies = typeof f.discrepancies === 'string'
@@ -72,7 +75,8 @@ export async function GET() {
       };
     });
 
-    const riskQueue = (data?.risk_orgs ?? []).map((o: any) => ({
+    type RiskOrgRow = { id: string; name: string; health_score: number; billing_status: string };
+    const riskQueue = ((data?.risk_orgs ?? []) as RiskOrgRow[]).map((o) => ({
       id: `risk_${o.id}`,
       type: 'high_churn_risk',
       severity: 'critical' as const,
@@ -85,7 +89,7 @@ export async function GET() {
 
     const allIssues = [...violations, ...duplicates, ...divergentReceipts, ...riskQueue];
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       data: {
         duplicates,
@@ -100,17 +104,10 @@ export async function GET() {
         },
       },
     });
+    response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+    return response;
   } catch (error) {
     console.error('Get compliance error:', error);
-    return NextResponse.json({
-      ok: true,
-      data: {
-        duplicates: [],
-        divergentReceipts: [],
-        violations: [],
-        riskQueue: [],
-        summary: { totalIssues: 0, critical: 0, warnings: 0, info: 0 },
-      },
-    });
+    return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

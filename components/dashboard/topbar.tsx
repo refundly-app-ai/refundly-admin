@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from './theme-toggle';
+import { useSidebar } from '@/components/ui/sidebar';
 
 interface Notification {
   id: string;
@@ -34,16 +35,11 @@ interface Notification {
 
 interface TopbarProps {
   onOpenCommandPalette: () => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
 }
 
-export function Topbar({
-  onOpenCommandPalette,
-  sidebarCollapsed,
-  onToggleSidebar,
-}: TopbarProps) {
+export function Topbar({ onOpenCommandPalette }: TopbarProps) {
   const router = useRouter();
+  const { open, toggleSidebar } = useSidebar();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -73,8 +69,8 @@ export function Topbar({
           type="button"
           variant="ghost"
           size="icon"
-          onClick={onToggleSidebar}
-          aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+          onClick={toggleSidebar}
+          aria-label={open ? 'Recolher menu lateral' : 'Expandir menu lateral'}
         >
           <PanelLeft className="h-4 w-4" />
         </Button>

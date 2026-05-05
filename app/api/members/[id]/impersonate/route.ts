@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { logActivity } from '@/lib/audit';
+import { findAdminById } from '@/lib/db/admins';
 
 const impersonateSchema = z.object({
   reason: z.string().min(3, 'Motivo deve ter pelo menos 3 caracteres'),
@@ -20,6 +21,14 @@ export async function POST(
 
     if (!session.adminId || !session.totpVerified) {
       return NextResponse.json({ ok: false, error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const adminRecord = await findAdminById(session.adminId);
+    if (!adminRecord || !adminRecord.is_active) {
+      return NextResponse.json({ ok: false, error: 'Não autorizado' }, { status: 403 });
+    }
+    if (adminRecord.role !== 'super_admin') {
+      return NextResponse.json({ ok: false, error: 'Não autorizado' }, { status: 403 });
     }
 
     const body = await request.json();

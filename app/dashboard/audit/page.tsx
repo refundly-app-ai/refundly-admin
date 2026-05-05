@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useMemo, useState } from 'react';
+import { useDebounce } from '@/hooks/use-debounce';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -30,8 +32,6 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const fallbackConfig = { icon: Settings, color: 'text-muted-foreground', label: '' };
 
@@ -71,38 +71,33 @@ export default function AuditPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [isExporting, setIsExporting] = useState(false);
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
-  const { data: auditData, isLoading } = useSWR('/api/audit?type=tenant&limit=100', fetcher);
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams({ type: 'tenant', limit: '50' });
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (actionFilter !== 'all') params.set('action', actionFilter);
+    return `/api/audit?${params.toString()}`;
+  }, [debouncedSearch, actionFilter]);
 
-  const rawLogs = (auditData?.data?.items ?? []).map((l: Record<string, unknown>) => ({
+  const { data: auditData, isLoading } = useQuery({
+    queryKey: ['audit', debouncedSearch, actionFilter],
+    queryFn: () => fetch(apiUrl).then((r) => r.json()),
+  });
+
+  const filteredLogs = (auditData?.data?.items ?? []).map((l: Record<string, unknown>) => ({
     id: l.id as string,
     action: l.action as string,
-    actorId: (l.actor_id as string) ?? '',
-    actorName: (l.profiles as { full_name?: string; email?: string } | null)?.full_name || (l.profiles as { email?: string } | null)?.email || 'Desconhecido',
+    actorId: (l.actorId as string) ?? '',
+    actorName: (l.actorName as string) || 'Desconhecido',
     actorType: 'user',
-    targetName: (l.organizations as { name?: string } | null)?.name,
+    targetName: (l.orgName as string) ?? undefined,
     metadata: (l.metadata as Record<string, unknown>) ?? {},
-    ipAddress: (l.ip as string) ?? (l.ip_address as string),
-    timestamp: l.created_at as string,
+    ipAddress: (l.ip as string) ?? '',
+    timestamp: l.createdAt as string,
   }));
 
-  let filteredLogs = [...rawLogs];
-
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    filteredLogs = filteredLogs.filter(
-      (log) =>
-        log.actorName.toLowerCase().includes(q) ||
-        (log.targetName?.toLowerCase().includes(q) ?? false) ||
-        log.action.toLowerCase().includes(q)
-    );
-  }
-
-  if (actionFilter !== 'all') {
-    filteredLogs = filteredLogs.filter((log) => log.action.startsWith(actionFilter));
-  }
-
-  const total = auditData?.data?.pagination?.total ?? rawLogs.length;
+  const total = auditData?.data?.pagination?.total ?? filteredLogs.length;
 
   async function handleExport() {
     setIsExporting(true);
@@ -156,7 +151,7 @@ export default function AuditPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : total}
+              {isLoading ? <Skeleton className="h-8 w-16" /> : total}
             </div>
           </CardContent>
         </Card>
@@ -168,7 +163,7 @@ export default function AuditPage() {
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '—' : rawLogs.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '—' : filteredLogs.length}</div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
@@ -218,8 +213,16 @@ export default function AuditPage() {
       <Card className="bg-card border-border">
         <CardContent className="pt-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-4 rounded-lg border border-border p-4">
+                  <Skeleton className="mt-0.5 h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="space-y-4">

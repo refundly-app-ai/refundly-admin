@@ -1,12 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { MetricsCards } from '@/components/dashboard/metrics-cards';
-import { MRRChart, SignupsChart, TierDistributionChart, RequestsChart } from '@/components/dashboard/charts';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { SystemHealthCard } from '@/components/dashboard/system-health';
 import type { DashboardMetrics, AuditLog, TimeSeriesData, ChartData, SystemHealth } from '@/lib/types';
+
+const MRRChart = dynamic(() => import('@/components/dashboard/charts').then((m) => ({ default: m.MRRChart })), { ssr: false });
+const SignupsChart = dynamic(() => import('@/components/dashboard/charts').then((m) => ({ default: m.SignupsChart })), { ssr: false });
+const TierDistributionChart = dynamic(() => import('@/components/dashboard/charts').then((m) => ({ default: m.TierDistributionChart })), { ssr: false });
+const RequestsChart = dynamic(() => import('@/components/dashboard/charts').then((m) => ({ default: m.RequestsChart })), { ssr: false });
 
 interface DashboardData {
   metrics: DashboardMetrics;
@@ -73,8 +79,39 @@ export default function DashboardPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="mt-1 h-4 w-64" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="bg-card border-border">
+              <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
+              <CardContent><Skeleton className="h-8 w-16" /></CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="col-span-2 bg-card border-border">
+            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+            <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader><Skeleton className="h-5 w-28" /></CardHeader>
+            <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+          </Card>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="col-span-2 bg-card border-border">
+            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+            <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader><Skeleton className="h-5 w-28" /></CardHeader>
+            <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

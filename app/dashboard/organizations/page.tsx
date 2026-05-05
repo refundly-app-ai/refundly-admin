@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR from 'swr';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,8 +49,6 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
 type OrgTier = Plan;
 
 const statusColors: Record<OrganizationStatus, string> = {
@@ -96,7 +94,12 @@ export default function OrganizationsPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const { data: orgsData, isLoading, mutate } = useSWR('/api/organizations?limit=100', fetcher);
+  const queryClient = useQueryClient();
+  const { data: orgsData, isLoading } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: () => fetch('/api/organizations?limit=100').then((r) => r.json()),
+  });
+  function mutate() { queryClient.invalidateQueries({ queryKey: ['organizations'] }); }
 
   const organizations: Organization[] = (orgsData?.data?.items ?? []).map((o: Record<string, unknown>) => {
     const isActive = o.is_active as boolean;

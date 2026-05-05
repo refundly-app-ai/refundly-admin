@@ -36,19 +36,25 @@ export async function GET() {
       avgComplianceScore: kpi?.avg_compliance_score ?? 0,
     };
 
-    const recentLogs: AuditLog[] = (logsResult.data ?? []).map((l: any) => ({
-      id: l.id,
-      action: l.action,
-      actorId: l.admin_id ?? '',
-      actorName: l.platform_admins?.full_name || l.platform_admins?.email || 'Sistema',
-      actorType: l.admin_id ? ('admin' as const) : ('system' as const),
-      targetName: l.organizations?.name,
-      metadata: l.metadata ?? {},
-      ipAddress: l.ip,
-      timestamp: l.created_at,
-    }));
+    const recentLogs: AuditLog[] = (logsResult.data ?? []).map((l) => {
+      const admin = Array.isArray(l.platform_admins) ? l.platform_admins[0] : l.platform_admins;
+      const org = Array.isArray(l.organizations) ? l.organizations[0] : l.organizations;
+      return {
+        id: l.id,
+        action: l.action,
+        actorId: l.admin_id ?? '',
+        actorName: admin?.full_name || admin?.email || 'Sistema',
+        actorType: l.admin_id ? ('admin' as const) : ('system' as const),
+        targetName: org?.name,
+        metadata: l.metadata ?? {},
+        ipAddress: l.ip,
+        timestamp: l.created_at,
+      };
+    });
 
-    return NextResponse.json({ ok: true, data: { metrics, recentLogs } });
+    const response = NextResponse.json({ ok: true, data: { metrics, recentLogs } });
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    return response;
   } catch (error) {
     console.error('Get KPIs error:', error);
     return NextResponse.json({ ok: false, error: 'Erro interno do servidor' }, { status: 500 });

@@ -13,9 +13,13 @@ export interface SessionData {
   expiresAt?: number;
 }
 
+if (!process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET environment variable is not set');
+}
+
 // Use __Host- prefix in production (enforces Secure + Path=/), plain name in dev
 export const sessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long_for_dev',
+  password: process.env.SESSION_SECRET,
   cookieName: process.env.NODE_ENV === 'production' ? '__Host-pa_sess' : 'pa_sess',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',

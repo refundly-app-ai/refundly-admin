@@ -25,10 +25,10 @@ export async function GET() {
 
     if (error) {
       console.error('List admins error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao listar admins' }, { status: 500 });
     }
 
-    const admins = (data ?? []).map((row: any) => ({
+    const admins = (data ?? []).map((row) => ({
       id: row.id,
       email: row.email,
       fullName: row.full_name,
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Create admin error:', error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Erro ao criar admin' }, { status: 500 });
     }
 
     await logActivity({
@@ -132,7 +132,6 @@ export async function POST(request: NextRequest) {
           totpEnabled: data.totp_enabled,
           createdAt: data.created_at,
         },
-        tempPassword,
       },
     });
   } catch (error) {

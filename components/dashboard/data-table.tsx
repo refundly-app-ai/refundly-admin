@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useDebounce } from '@/hooks/use-debounce';
 import {
   Table,
   TableBody,
@@ -53,13 +54,14 @@ export function DataTable<T extends { id: string }>({
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const debouncedSearch = useDebounce(search, 300);
 
   // Filter data
   let filteredData = [...data];
 
   // Apply search
-  if (search && searchKey) {
-    const searchLower = search.toLowerCase();
+  if (debouncedSearch && searchKey) {
+    const searchLower = debouncedSearch.toLowerCase();
     filteredData = filteredData.filter((item) => {
       const value = item[searchKey];
       return String(value).toLowerCase().includes(searchLower);

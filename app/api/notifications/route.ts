@@ -12,11 +12,19 @@ interface Notification {
   link?: string;
 }
 
+type NotificationCtx = {
+  id: string;
+  action: string;
+  org_id: string | null;
+  metadata: Record<string, string> | null;
+  orgName: string | null;
+};
+
 type Template = {
   type: Notification['type'];
   severity: Notification['severity'];
-  title: (m: any) => string;
-  description?: (m: any) => string | undefined;
+  title: (m: NotificationCtx) => string;
+  description?: (m: NotificationCtx) => string | undefined;
 };
 
 const ACTION_TEMPLATES: Record<string, Template> = {
@@ -90,11 +98,16 @@ export async function GET() {
       return NextResponse.json({ ok: true, data: [] });
     }
 
-    const notifications: Notification[] = (data ?? []).map((row: any) => {
+    const notifications: Notification[] = (data ?? []).map((row) => {
       const tpl = ACTION_TEMPLATES[row.action];
-      const ctx = {
-        ...row,
-        orgName: row.organizations?.name,
+      const orgsArr = row.organizations;
+      const orgName = Array.isArray(orgsArr) ? (orgsArr[0]?.name ?? null) : null;
+      const ctx: NotificationCtx = {
+        id: row.id,
+        action: row.action,
+        org_id: row.org_id,
+        metadata: row.metadata as Record<string, string> | null,
+        orgName,
       };
       return {
         id: row.id,
