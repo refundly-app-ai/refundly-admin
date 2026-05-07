@@ -85,7 +85,8 @@ export default function AuditPage() {
     queryFn: () => fetch(apiUrl).then((r) => r.json()),
   });
 
-  const filteredLogs = (auditData?.data?.items ?? []).map((l: Record<string, unknown>) => ({
+  type AuditLogItem = { id: string; action: string; actorId: string; actorName: string; actorType: string; targetName: string | undefined; metadata: Record<string, unknown>; ipAddress: string; timestamp: string };
+  const filteredLogs: AuditLogItem[] = (auditData?.data?.items ?? []).map((l: Record<string, unknown>) => ({
     id: l.id as string,
     action: l.action as string,
     actorId: (l.actorId as string) ?? '',

@@ -11,6 +11,7 @@ export interface DbAdmin {
   totp_enabled: boolean;
   totp_recovery_codes: string[] | null;
   is_active: boolean;
+  role: string;
   failed_login_attempts: number;
   locked_until: string | null;
   last_login_at: string | null;

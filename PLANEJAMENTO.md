@@ -1,6 +1,6 @@
 # Relatório de Análise Geral — Refundly Admin Panel
 
-> **Última atualização**: 2026-05-05 | 6/7 pendências resolvidas — 1 pendente (aguardando assinatura da RPC)
+> **Última atualização**: 2026-05-06 | ✅ Todas as pendências resolvidas — projeto concluído
 
 ---
 
@@ -18,7 +18,7 @@
 **Fase 2 (Performance API)**: ✅ 5/5 itens concluídos  
 **Fase 3 (Cache)**: ✅ Cache-Control headers em todas as rotas  
 **Fase 4 (Frontend)**: ✅ Todos os itens concluídos (incluindo residuais FE-2/5/6/7)  
-**Fase 5 (Arquitetura)**: ✅ Quase completo — 1 residual pendente (ARCH-N+1)  
+**Fase 5 (Arquitetura)**: ✅ Todos os itens concluídos (incluindo ARCH-N+1)  
 **SQL (Banco de dados)**: ✅ Todos os comandos executados com sucesso  
 
 ---
@@ -61,32 +61,19 @@
 
 ---
 
-## 🔴 ÚNICA PENDÊNCIA RESTANTE — ARCH-N+1
+## ✅ ARCH-N+1 — RESOLVIDO (2026-05-06)
 
-### ⏳ ARCH-N+1 — N+1 em `/api/organizations`
+### ✅ ARCH-N+1 — N+1 em `/api/organizations`
 **Arquivo**: `app/api/organizations/route.ts`
 
 **Problema atual**:
 - Query 1: lista orgs paginadas com filtros
 - Query 2: RPC `superadmin_org_stats` busca stats de **todas** as orgs sem filtro, combina em JS
 
-**O que falta**: verificar se a RPC aceita parâmetro de filtro por IDs (`p_org_ids uuid[]`). Se sim, passar apenas os IDs da página atual e evitar varredura completa.
-
-**Como verificar no Supabase:**
-
-Opção 1 — Via Dashboard:
-1. Acesse o painel do Supabase do projeto
-2. Vá em **Database → Functions** (menu lateral esquerdo)
-3. Procure por `superadmin_org_stats` e clique — verá os parâmetros aceitos
-
-Opção 2 — Via SQL Editor:
-```sql
-SELECT pg_get_functiondef(oid)
-FROM pg_proc
-WHERE proname = 'superadmin_org_stats';
-```
-
-Cole o resultado aqui e a otimização é implementada na hora.
+**Solução aplicada (2026-05-06)**:
+- RPC alterada para aceitar `p_org_ids uuid[]` — filtra apenas as orgs da página atual
+- `app/api/organizations/route.ts` atualizado para extrair IDs da página e passá-los à RPC
+- Resultado: varredura completa eliminada, máximo de 20 linhas processadas por request
 
 ---
 
@@ -155,3 +142,14 @@ Cole o resultado aqui e a otimização é implementada na hora.
 | Nova RPC `superadmin_list_members(p_limit, p_offset, p_search, p_role)` com cast `::TEXT` para enum `app_role` | ✅ Executado |
 | Índices `idx_profiles_email_lower` e `idx_profiles_full_name_lower` | ✅ Executado |
 | `app/api/members/route.ts` | ✅ Atualizado para usar nova RPC com filtros no banco |
+| RPC `superadmin_org_stats` alterada para aceitar `p_org_ids uuid[]` | ✅ Executado |
+
+### Fase 7 — Qualidade final (2026-05-06) ✅
+| Item | Arquivo | Correção |
+|------|---------|---------|
+| TS | `lib/db/admins.ts` | Campo `role` adicionado à interface `DbAdmin` |
+| Lint | `components/dashboard/sidebar.tsx` | `toggleSidebar` não usado removido do destructuring |
+| Lint | `app/dashboard/members/page.tsx` | `Loader2` não usado removido do import |
+| TS | `app/dashboard/audit/page.tsx` | `filteredLogs` tipado como `AuditLogItem[]` — elimina `any` implícito |
+
+**Resultado final**: `tsc --noEmit` → 0 erros | `eslint .` → 0 erros, 0 warnings | `npm run build` → 42 páginas ✅

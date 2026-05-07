@@ -28,7 +28,6 @@ import {
   Shield,
   Key,
   UserCog,
-  Loader2,
 } from 'lucide-react';
 import { MembersStatsCards } from './_components/members-stats-cards';
 import { InviteMemberModal } from './_components/invite-member-modal';

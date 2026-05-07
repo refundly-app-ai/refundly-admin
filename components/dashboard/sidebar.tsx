@@ -64,7 +64,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { admin, complianceCount } = useAdminData();
-  const { open: collapsed, toggleSidebar } = useSidebar();
+  const { open: collapsed } = useSidebar();
 
   // useSidebar().open = true means expanded; we invert for local "collapsed" semantics
   const isCollapsed = !collapsed;

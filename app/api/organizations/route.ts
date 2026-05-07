@@ -47,9 +47,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Erro ao buscar organizações' }, { status: 500 });
     }
 
-    const [{ data: statsData }] = await Promise.all([
-      supabaseAdmin.rpc('superadmin_org_stats'),
-    ]);
+    const orgIds = (data ?? []).map((org) => org.id);
+    const { data: statsData } = await supabaseAdmin.rpc('superadmin_org_stats', {
+      p_org_ids: orgIds,
+    });
 
     const statsMap = new Map<string, { member_count: number; mrr: number }>();
     for (const s of statsData ?? []) {
