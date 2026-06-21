@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from './theme-toggle';
-import { useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/app/dashboard/layout';
 
 interface Notification {
   id: string;

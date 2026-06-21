@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAdminData } from '@/components/providers/admin-data-provider';
-import { useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/app/dashboard/layout';
 import {
   LayoutDashboard,
   Building2,
